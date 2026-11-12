@@ -1,17 +1,26 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:agosalert/data/demo_data.dart';
 import 'package:agosalert/main.dart';
+import 'package:agosalert/screens/assistance_tab.dart';
 import 'package:agosalert/screens/evacuation_centers_screen.dart';
 import 'package:agosalert/screens/home_shell.dart';
 import 'package:agosalert/screens/info_screens.dart';
 import 'package:agosalert/screens/map_tab.dart';
-import 'package:agosalert/screens/more_tab.dart';
+import 'package:agosalert/screens/reports_tab.dart';
 import 'package:agosalert/screens/report_incident_screen.dart';
 import 'package:agosalert/screens/settings_screen.dart';
+import 'package:agosalert/screens/weather_tab.dart';
+import 'package:agosalert/services/weather.dart';
+import 'package:agosalert/widgets/check_in.dart';
 import 'package:agosalert/theme.dart';
 import 'package:agosalert/widgets/agos_icons.dart';
 import 'package:agosalert/widgets/agos_map.dart';
@@ -36,21 +45,58 @@ Future<void> pumpPhone(
 }
 
 void main() {
-  // Logging in happens on the landing page, so the app opens on Home.
-  testWidgets('App starts on Home', (WidgetTester tester) async {
+  // shared_preferences has no browser in tests: give it empty fake storage.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  // Every step of the Before / During / After timeline fits on a phone
+  // (During adds the water-depth diagram).
+  testWidgets('Help: every Be ready step renders', (tester) async {
+    await pumpPhone(tester, const Scaffold(body: AssistanceTab()));
+    for (final step in ['During', 'After', 'Before']) {
+      await tester.scrollUntilVisible(find.text(step), 300);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text(step));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await tester.tap(find.text('During'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Moving water is stronger than it looks'), findsOneWidget);
+  });
+
+  // The go-bag ticks are saved, so they come back after a reload.
+  testWidgets('Help: go-bag ticks survive a reload', (tester) async {
+    await pumpPhone(tester, const Scaffold(body: AssistanceTab()));
+    final item = find.text('Whistle');
+    // The list builds lazily: scroll until the item exists and shows.
+    await tester.scrollUntilVisible(item, 300);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(item);
+    await tester.pump();
+    // A fresh tab = what a reload does.
+    await tester.pumpWidget(const SizedBox());
+    await pumpPhone(tester, const Scaffold(body: AssistanceTab()));
+    await tester.scrollUntilVisible(find.text('Pack a go-bag'), 300);
+    expect(find.text('1/9'), findsOneWidget);
+  });
+
+  // Logging in happens on the landing page, so the app opens on Weather.
+  testWidgets('App starts on Weather', (WidgetTester tester) async {
     await tester.pumpWidget(const AgosAlertApp());
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.byType(HomeShell), findsOneWidget);
-    expect(find.text('Quick actions'), findsOneWidget);
+    expect(find.byType(WeatherTab), findsOneWidget);
   });
 
   // Each tab and screen should build on a phone without layout errors
   // (a "RenderFlex overflowed" error makes the test fail).
   testWidgets('All tabs render on a phone', (tester) async {
     await pumpPhone(tester, const HomeShell());
-    for (final tab in ['Map', 'Alerts', 'Assistance', 'More', 'Home']) {
-      await tester.tap(find.text(tab).last);
+    for (final tab in ['Map', 'Reports', 'Help', 'Weather']) {
+      // Only the open tab shows its name; every tile has it as a tooltip.
+      await tester.tap(find.byTooltip(tab));
       await tester.pump(const Duration(seconds: 1));
     }
   });
@@ -63,9 +109,7 @@ void main() {
   ]) {
     testWidgets('$name: top nav and every tab render', (tester) async {
       await pumpPhone(tester, const HomeShell(), size: size);
-      // No More tab on wide screens (it's in the profile menu).
-      expect(find.text('More'), findsNothing);
-      for (final tab in ['Map', 'Alerts', 'Assistance', 'Home']) {
+      for (final tab in ['Map', 'Reports', 'Help', 'Weather']) {
         await tester.tap(
           size.width >= 1024 ? find.text(tab).first : find.byTooltip(tab),
         );
@@ -95,6 +139,8 @@ void main() {
     await tester.tap(find.byTooltip('Account'));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Dark mode'), findsOneWidget);
+    expect(find.text('My barangay'), findsOneWidget);
     expect(find.text('Log out'), findsOneWidget);
     expect(find.text('Votes on your uploads'), findsOneWidget);
   });
@@ -103,9 +149,9 @@ void main() {
   // (it once stayed visible on top of the new one).
   testWidgets('Switching tabs hides the previous tab', (tester) async {
     await pumpPhone(tester, const HomeShell());
-    await tester.tap(find.text('More').last);
+    await tester.tap(find.byTooltip('Help'));
     await tester.pump(const Duration(seconds: 1));
-    await tester.tap(find.text('Home').last);
+    await tester.tap(find.byTooltip('Weather'));
     await tester.pump(); // rebuild: the fade starts here
     await tester.pump(const Duration(seconds: 1)); // let it finish
 
@@ -125,8 +171,13 @@ void main() {
           .value;
     }
 
-    expect(opacityOf('Settings'), 0); // More tab is hidden
-    expect(opacityOf('Quick actions'), 1); // Home tab is visible
+    expect(opacityOf('Request rescue'), 0); // Help tab is hidden
+    expect(
+      opacityOf(
+        'Weather by Open-Meteo · Sections marked SAMPLE use demo data · Unofficial demo',
+      ),
+      1,
+    ); // Weather tab is visible
   });
 
   // The map must stay inside Mabalacat City, however far you drag it.
@@ -244,29 +295,85 @@ void main() {
     expect(activeFloodZones.length, kFloodZones.length);
   });
 
-  testWidgets('Guests get a login popup from the map Report button', (
+  // The + in the Reports tab opens three actions; guests can't report.
+  testWidgets('The + button: actions, and guests get a login popup', (
     tester,
   ) async {
     isGuest = true;
     addTearDown(() => isGuest = false);
-    await pumpPhone(tester, const Scaffold(body: MapTab()));
-    await tester.tap(find.text('Report'));
+    await pumpPhone(tester, const HomeShell());
+    await tester.tap(find.byTooltip('Reports'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.byTooltip('Report, I\'m safe, SOS'));
+    // Two pumps: the first starts the popup's opening, the second finishes
+    // it (it only takes taps once it's fully open).
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('I\'m safe'), findsOneWidget);
+    expect(find.text('SOS'), findsOneWidget);
+    await tester.tap(find.text('Report flood'));
+    await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Log in to report'), findsOneWidget);
   });
 
-  testWidgets('Profile shows votes received, but not for guests', (
+  testWidgets('Phone avatar menu: votes received, but not for guests', (
     tester,
   ) async {
     isGuest = false;
-    await pumpPhone(tester, const Scaffold(body: MoreTab()));
+    await pumpPhone(tester, const HomeShell());
+    await tester.tap(find.byTooltip('Account'));
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('$kMyUpVotesReceived'), findsOneWidget);
+    expect(find.text('Dark mode'), findsOneWidget);
     isGuest = true;
     addTearDown(() => isGuest = false);
-    // A new key makes Flutter build the tab again with the new isGuest.
-    await pumpPhone(tester, const Scaffold(body: MoreTab(key: ValueKey(1))));
-    expect(find.text('Guest'), findsOneWidget);
+    // A new key makes Flutter build the shell again with the new isGuest.
+    await pumpPhone(tester, const HomeShell(key: ValueKey(1)));
+    await tester.tap(find.byTooltip('Account'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Guest'), findsWidgets);
     expect(find.text('Votes on your uploads'), findsNothing);
+  });
+
+  test('"I\'m safe" message names the user and their barangay', () {
+    isGuest = false;
+    myBarangay.value = 'Dau';
+    addTearDown(() => myBarangay.value = null);
+    final m = imSafeMessage(DateTime(2026, 11, 12, 15, 40));
+    expect(
+      m,
+      startsWith(
+        'I\'m safe. — $kDemoUserName, Brgy. Dau · Thu, Nov 12, 3:40 PM',
+      ),
+    );
+  });
+
+  testWidgets('Reports: "Still flooded?" saves only your answer, and undo', (
+    tester,
+  ) async {
+    isGuest = false;
+    stillFlooded.value = {};
+    await pumpPhone(tester, ReportPost(zone: kFloodZones.first));
+    await tester.tap(find.text('Yes'));
+    await tester.pump();
+    expect(stillFlooded.value, {'Dau': true});
+    expect(find.textContaining('still flooded'), findsOneWidget);
+    await tester.tap(find.text('Undo'));
+    await tester.pump();
+    expect(stillFlooded.value, isEmpty);
+  });
+
+  testWidgets('Map: the bottom bar opens into the reports list', (
+    tester,
+  ) async {
+    await pumpPhone(tester, const Scaffold(body: MapTab()));
+    await tester.tap(find.textContaining('shelters open'));
+    await tester.pump(); // starts the sheet's slide up
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Brgy. Dau'), findsOneWidget);
+    expect(tester.getSize(find.text('Brgy. Dau')).height, greaterThan(0));
   });
 
   testWidgets('Report: dragging the water sets depth and severity', (
@@ -305,16 +412,67 @@ void main() {
     });
   }
 
+  // The Weather tab with real weather (the saved fixture): the sky card
+  // scrubs to a forecast hour and back, and the city map's panel sets
+  // "my barangay". Phone first, then the same page at desktop size.
+  testWidgets('Weather: scrub the next 24 hours, pick a barangay', (
+    tester,
+  ) async {
+    final json = File('test/fixtures/weather.json').readAsStringSync();
+    final client = MockClient(
+      (_) async => http.Response(
+        json,
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      ),
+    );
+    myBarangay.value = null;
+    addTearDown(() => myBarangay.value = null);
+    await http.runWithClient(() async {
+      MabalacatWeather.load(refresh: true);
+      await pumpPhone(tester, const Scaffold(body: WeatherTab()));
+    }, () => client);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('MABALACAT CITY · LIVE'), findsOneWidget);
+
+    final strip = find.byWidgetPredicate(
+      (w) =>
+          w is CustomPaint &&
+          w.painter.runtimeType.toString() == '_ScrubPainter',
+    );
+    await tester.drag(strip, const Offset(120, 0));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.textContaining('FORECAST ·'), findsOneWidget);
+    await tester.tap(find.widgetWithText(PressableScale, 'Now'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('MABALACAT CITY · LIVE'), findsOneWidget);
+
+    // No barangay yet: the map selects the worst report and offers it.
+    await tester.scrollUntilVisible(find.text('Make it mine'), 300);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Make it mine'));
+    await tester.pump();
+    expect(myBarangay.value, 'Dau');
+
+    await pumpPhone(
+      tester,
+      const Scaffold(body: WeatherTab()),
+      size: const Size(1440, 900),
+    );
+  });
+
   // Keep this test LAST. After it, a deferred tab that a later test opens
   // for the first time never finishes loading (a quirk of how the test
   // runner handles deferred code, not an app bug: it was the More tab in
   // "Switching tabs hides the previous tab").
-  // (Alerts, not Map: the Map tab starts real tile downloads.)
+  // (Reports, not Map: the Map tab starts real tile downloads.)
   testWidgets('HomeShell can open on another tab', (tester) async {
     await pumpPhone(tester, const HomeShell(initialTab: 2));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.byType(ListPageSkeleton), findsNothing); // Alerts loaded
-    expect(find.text('Quick actions'), findsNothing); // Home never built
+    expect(find.byType(ListPageSkeleton), findsNothing); // Reports loaded
+    expect(find.byType(WeatherTab), findsNothing); // Weather never built
   });
 
   test('Spring curves settle before their time is up (no jump at the end)', () {

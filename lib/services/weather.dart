@@ -17,14 +17,20 @@ class HourlyForecast {
   final DateTime time;
   final double temperature;
   final int rainChance; // %
+  final double rain; // mm expected in this hour
   final int weatherCode;
   final bool isDay;
+  final int humidity; // %
+  final double windSpeed; // km/h
   const HourlyForecast(
     this.time,
     this.temperature,
     this.rainChance,
+    this.rain,
     this.weatherCode,
     this.isDay,
+    this.humidity,
+    this.windSpeed,
   );
 }
 
@@ -54,8 +60,12 @@ class MabalacatWeather {
   final int weatherCode; // WMO code, see weatherInfo()
   final bool isDay;
   final DateTime time; // local Manila time
-  final List<HourlyForecast> hourly; // next 12 hours
+  final List<HourlyForecast> hourly; // next 24 hours
   final List<DailyForecast> daily; // today + next days
+  // Rain in each 15 minutes of the next 2 hours: (start time, mm).
+  // Open-Meteo makes these from its forecast models (outside Europe and
+  // North America they're filled in from hourly data, not from radar).
+  final List<(DateTime, double)> nextTwoHours;
 
   const MabalacatWeather({
     required this.temperature,
@@ -68,9 +78,28 @@ class MabalacatWeather {
     required this.time,
     required this.hourly,
     required this.daily,
+    required this.nextTwoHours,
   });
 
   DailyForecast get today => daily.first;
+
+  /// When rain is expected to start in the next 2 hours, or null if it
+  /// stays dry. 0.1 mm in 15 minutes is about the lightest rain you notice.
+  DateTime? get rainStartsAt {
+    for (final (t, mm) in nextTwoHours) {
+      if (mm >= 0.1) return t;
+    }
+    return null;
+  }
+
+  /// One plain line for the rain chart: "Rain likely from 3:15 PM" or
+  /// "No rain in the next 2 hours".
+  String get nextTwoHoursText {
+    final start = rainStartsAt;
+    if (start == null) return 'No rain in the next 2 hours';
+    if (!start.isAfter(time)) return 'Raining now';
+    return 'Rain likely from ${formatTime(start)}';
+  }
 
   // The web address we ask for the weather. Uri.https builds it safely:
   //   https://api.open-meteo.com/v1/forecast?latitude=15.2236&...
@@ -82,7 +111,11 @@ class MabalacatWeather {
     'current':
         'temperature_2m,relative_humidity_2m,apparent_temperature,'
         'precipitation,weather_code,wind_speed_10m,is_day',
-    'hourly': 'temperature_2m,precipitation_probability,weather_code,is_day',
+    'hourly':
+        'temperature_2m,precipitation_probability,precipitation,'
+        'weather_code,is_day,relative_humidity_2m,wind_speed_10m',
+    'minutely_15': 'precipitation',
+    'forecast_minutely_15': '9', // the current quarter + the next 2 hours
     'daily':
         'weather_code,temperature_2m_max,temperature_2m_min,'
         'precipitation_probability_max,precipitation_sum',
@@ -160,12 +193,12 @@ class MabalacatWeather {
     // null there (it sometimes has gaps).
     num n(List list, int i) => (list[i] as num?) ?? 0;
 
-    // Hourly data starts at midnight today; keep the next 12 hours.
+    // Hourly data starts at midnight today; keep the next 24 hours.
     // Hours before the current hour are skipped with `continue`, and the
-    // loop stops once 12 hours are collected.
+    // loop stops once 24 hours are collected.
     final hTimes = (h['time'] as List).cast<String>();
     final hourly = <HourlyForecast>[];
-    for (var i = 0; i < hTimes.length && hourly.length < 12; i++) {
+    for (var i = 0; i < hTimes.length && hourly.length < 24; i++) {
       final t = DateTime.parse(hTimes[i]);
       if (t.isBefore(DateTime(now.year, now.month, now.day, now.hour))) {
         continue;
@@ -175,8 +208,11 @@ class MabalacatWeather {
           t,
           n(h['temperature_2m'], i).toDouble(),
           n(h['precipitation_probability'], i).toInt(),
+          n(h['precipitation'], i).toDouble(),
           n(h['weather_code'], i).toInt(),
           n(h['is_day'], i) == 1,
+          n(h['relative_humidity_2m'], i).toInt(),
+          n(h['wind_speed_10m'], i).toDouble(),
         ),
       );
     }
@@ -194,6 +230,19 @@ class MabalacatWeather {
         ),
     ];
 
+    // 15-minute rain: keep the quarters that haven't ended yet.
+    final m = json['minutely_15'] as Map<String, dynamic>?;
+    final nextTwoHours = <(DateTime, double)>[];
+    if (m != null) {
+      final mTimes = (m['time'] as List).cast<String>();
+      for (var i = 0; i < mTimes.length; i++) {
+        final t = DateTime.parse(mTimes[i]);
+        if (t.add(const Duration(minutes: 15)).isAfter(now)) {
+          nextTwoHours.add((t, n(m['precipitation'], i).toDouble()));
+        }
+      }
+    }
+
     return MabalacatWeather(
       temperature: (cur['temperature_2m'] as num).toDouble(),
       feelsLike: (cur['apparent_temperature'] as num).toDouble(),
@@ -205,6 +254,7 @@ class MabalacatWeather {
       time: now,
       hourly: hourly,
       daily: daily,
+      nextTwoHours: nextTwoHours,
     );
   }
 
@@ -280,14 +330,15 @@ class FloodOutlook {
   return ('Thunderstorm', CupertinoIcons.cloud_bolt_rain_fill);
 }
 
-/// Weather card background: graphite in every theme (like the iPhone's
-/// widgets). Only wet weather gets a hint of blue; the frog on the card
-/// brings the rest of the color.
+/// The sky card's colors, like looking up: blue on a clear day, slate when
+/// it rains, dark storm gray, deep indigo at night. White text reads on
+/// all of them.
 List<Color> weatherGradient(int code, bool isDay) {
-  if (code >= 51) return const [Color(0xFF1E2A3A), Color(0xFF0E141D)];
-  if (!isDay) return const [Color(0xFF1A1A1C), Color(0xFF050505)];
-  if (code <= 2) return const [Color(0xFF3A3A3C), Color(0xFF1C1C1E)];
-  return const [Color(0xFF2C2C2E), Color(0xFF161618)];
+  if (code >= 95) return const [Color(0xFF3B404F), Color(0xFF16181F)];
+  if (code >= 51) return const [Color(0xFF4A6375), Color(0xFF1E2A33)];
+  if (!isDay) return const [Color(0xFF262C66), Color(0xFF0C0F2B)];
+  if (code >= 3) return const [Color(0xFF5B6675), Color(0xFF2B323C)];
+  return const [Color(0xFF3F8AE6), Color(0xFF173F80)];
 }
 
 // 24-hour to 12-hour clock: `% 12` is the remainder after dividing by 12

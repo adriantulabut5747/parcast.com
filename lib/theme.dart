@@ -7,29 +7,41 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
-const String kFontFamily = 'Inter';
+const String kFontFamily = 'Inter'; // body text
+// Titles, big numbers, tab names: Inter Tight (narrower, punchier cut of
+// Inter). Use it with `fontFamily: kDisplayFont` on headings only.
+const String kDisplayFont = 'InterTight';
 
-// Palette: black and white like iOS, with ONE accent, blue. Color is
-// kept for meaning (blue = interactive, green/amber/red = risk), never for
-// decoration.
+// Palette "Graphite" (Nov 2026 redesign): warm graphite instead of pure
+// black, iOS blue as the accent, plus a few iOS tile colors for icons in
+// lists (like the Settings app). Risk colors (green / amber / red) are
+// reserved for flood risk and emergencies; never use them as decoration.
 const Color kInk = Color(0xFF1D1D1F); // near-black: light theme text, buttons
 const Color kGraphite = Color(0xFF2C2C2E); // neutral fill under photos
 const Color kGray = Color(0xFF8E8E93); // iOS system gray: neutral icons
 const Color kBlue = Color(0xFF0A84FF); // the accent (iOS system blue)
+
+// Icon tile colors (decorative). Never green, amber, or red: those mean risk.
+const Color kTileBlue = kBlue;
+const Color kTileIndigo = Color(0xFF5E5CE6);
+const Color kTileTeal = Color(0xFF32ADE6);
+const Color kTilePurple = Color(0xFFAF52DE);
+const Color kTileGray = Color(0xFF8E8E93);
 
 // Status colors (same in both themes)
 const Color kSafe = Color(0xFF22C55E);
 const Color kCaution = Color(0xFFF59E0B);
 const Color kDanger = Color(0xFFEF4444);
 
-// Dark theme: true black, like the iPhone's dark mode.
-const Color kBgDark = Color(0xFF000000);
-const Color kSurfaceDark = Color(0xFF1C1C1E); // sheets, menus (opaque)
+// Dark theme (the default): warm graphite, not pure black, so the page
+// feels deep instead of empty.
+const Color kBgDark = Color(0xFF111113);
+const Color kSurfaceDark = Color(0xFF1E1E21); // sheets, menus (opaque)
 const Color kTextPrimaryDark = Color(0xFFF5F5F7);
-const Color kTextSecondaryDark = Color(0xFF98989F);
+const Color kTextSecondaryDark = Color(0xFF9A9AA1);
 
-// Light theme: iOS "grouped" gray page with white cards.
-const Color kBgLight = Color(0xFFF2F2F7);
+// Light theme: warm off-white page with white cards.
+const Color kBgLight = Color(0xFFF4F3F0);
 const Color kSurfaceLight = Color(0xFFFFFFFF);
 const Color kTextPrimaryLight = kInk;
 const Color kTextSecondaryLight = Color(0xFF6E6E73);

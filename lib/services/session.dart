@@ -18,7 +18,8 @@ import '../theme.dart';
 ///
 ///   as     user | guest   logged in, or just looking around
 ///   theme  light | dark   so the app matches the landing page
-///   tab    home | map | alerts | assistance | more   (optional)
+///   tab    weather | map | reports | help   (optional; the old names
+///          home / assistance still work)
 ///
 /// It's a demo, so this is not real security: anyone can type ?as=user.
 /// A real backend would hand over a login token here instead.
@@ -42,12 +43,16 @@ void applyLaunchOptions() {
   }
 }
 
-/// Which tab to open first: 0 Home, 1 Map, 2 Alerts, 3 Assistance, 4 More.
-int get launchTab {
-  const tabs = ['home', 'map', 'alerts', 'assistance', 'more'];
-  final i = tabs.indexOf(_query['tab'] ?? '');
-  return i < 0 ? 0 : i;
-}
+/// Which tab to open first: 0 Weather, 1 Map, 2 Reports, 3 Help.
+/// Old links from before the Nov 2026 redesign still land somewhere
+/// sensible (home -> Weather, assistance -> Help; alerts and more are gone,
+/// so they open Weather).
+int get launchTab => switch (_query['tab']) {
+  'map' => 1,
+  'reports' => 2,
+  'help' || 'assistance' => 3,
+  _ => 0,
+};
 
 /// The published website with no `as=` in the address means someone
 /// opened /app/ directly (a bookmark, an old link): send them to the

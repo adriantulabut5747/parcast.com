@@ -885,10 +885,11 @@ class SectionHeader extends StatelessWidget {
                     title,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
+                      fontFamily: kDisplayFont,
                       color: c.textPrimary,
                       fontWeight: FontWeight.w800,
-                      fontSize: 16.5,
-                      letterSpacing: -0.2,
+                      fontSize: 18,
+                      letterSpacing: -0.3,
                     ),
                   ),
                 ),
@@ -1129,10 +1130,11 @@ class PageHeader extends StatelessWidget {
               Text(
                 title,
                 style: TextStyle(
+                  fontFamily: kDisplayFont,
                   color: c.textPrimary,
-                  fontSize: 26,
+                  fontSize: 30,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: -0.6,
+                  letterSpacing: -0.8,
                 ),
               ),
               if (subtitle != null) ...[
@@ -1205,8 +1207,9 @@ class SubpageScaffold extends StatelessWidget {
                   title,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
+                    fontFamily: kDisplayFont,
                     color: c.textPrimary,
-                    fontSize: 19,
+                    fontSize: 20,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
                   ),

@@ -29,10 +29,10 @@ import 'deferred_screens.dart';
 /// tilting with two fingers) raises the buildings and the hills.
 ///
 /// Everything else floats on top, iPhone Maps style:
-///   phones/tablets  header (title + filters) top left, round controls
-///                   top right, and a glass panel at the bottom with the
-///                   depth legend, Report, and the reports as swipeable
-///                   cards (swiping flies the map to that report).
+///   phones/tablets  small layer chips top left (+ the depth legend on
+///                   demand), round controls top right, and a sheet at
+///                   the bottom: a thin bar until dragged up, then the
+///                   reports and shelters. Reporting is the + in the nav.
 ///   desktop         a side panel with the lists, the map next to it.
 /// Anything floating over the web map is wrapped in MapGlass, which gives
 /// it real blur and stops its taps from reaching the map.
@@ -53,17 +53,11 @@ class _MapTabState extends State<MapTab> {
   // The report cards in the bottom panel: deepest water first.
   late final List<FloodZone> _zones = activeFloodZones.toList()
     ..sort((a, b) => b.depthCm.compareTo(a.depthCm));
-  PageController? _cards;
-  double _cardsFraction = 0;
 
   // Zoom levels: each +1 doubles the detail. 13 shows the whole city,
   // 18 single streets and buildings.
   static const _startZoom = 13.3;
   static const _pinZoom = 15.5;
-
-  // Phone/tablet bottom panel height (fixed, so the map knows how much of
-  // it is covered).
-  static const _panelHeight = 168.0;
 
   static String _zoneId(FloodZone z) => 'zone-${z.barangay}';
   static String _centerId(EvacuationCenter e) => 'center-${e.name}';
@@ -115,7 +109,6 @@ class _MapTabState extends State<MapTab> {
   void dispose() {
     focusedZone.removeListener(_openFocused);
     _map.dispose();
-    _cards?.dispose();
     super.dispose();
   }
 
@@ -135,21 +128,10 @@ class _MapTabState extends State<MapTab> {
     }
   }
 
-  // Highlights a pin, flies there, and brings its card into view.
+  // Highlights a pin (and its row in the lists) and flies there.
   void _focus(String id, LatLng point) {
     setState(() => _selected = id);
     _map.flyTo(point, zoom: _pinZoom);
-    final i = _zones.indexWhere((z) => _zoneId(z) == id);
-    final cards = _cards;
-    if (i >= 0 && cards != null && cards.hasClients) {
-      if (cards.page?.round() != i) {
-        cards.animateToPage(
-          i,
-          duration: const Duration(milliseconds: 450),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    }
   }
 
   void _recenter() {
@@ -183,55 +165,287 @@ class _MapTabState extends State<MapTab> {
   );
 
   // ------------------------------------------------------------ phones
+  // Nov 2026: the big header and bottom panel covered half the map, so
+  // phones now get iPhone-Maps-style pieces: a row of small chips at the
+  // top, the round controls on the right, and a sheet at the bottom that
+  // is just a thin bar until you drag it up (or tap it).
+
+  // The bottom sheet: [_peek] tall when closed. _dragHeight is its height
+  // while a finger is dragging it (null otherwise).
+  static const _peek = 64.0;
+  bool _sheetOpen = false;
+  double? _dragHeight;
+  bool _legendOpen = false;
+
+  double _sheetMax(BoxConstraints box) => math.min(box.maxHeight * 0.5, 440.0);
+
   Widget _floatingLayout(AppColors c, {required bool wide}) {
     // The map runs under the shell's glass top bar; `top` is that bar's
     // height (handed down as MediaQuery padding by HomeShell).
     final top = MediaQuery.paddingOf(context).top;
-    // Phones: the panel sits above the floating bottom nav. Tablets have
-    // none, and their panel doesn't stretch across the whole screen.
+    // Phones: the sheet sits above the floating bottom nav. Tablets have
+    // none, and their sheet doesn't stretch across the whole screen.
     final bottom = wide ? 16.0 : 96.0;
-    return Stack(
+    return LayoutBuilder(
+      builder: (context, box) {
+        final max = _sheetMax(box);
+        final height = _dragHeight ?? (_sheetOpen ? max : _peek);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: _mapView(
+                EdgeInsets.fromLTRB(0, top + 60, 64, bottom + _peek + 8),
+              ),
+            ),
+            Positioned(
+              top: top + 10,
+              left: 12,
+              right: 12,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _chipsAndLegend(c)),
+                  const SizedBox(width: 10),
+                  _controls(c, zoomButtons: wide),
+                ],
+              ),
+            ),
+            // The sheet. While dragging it follows the finger instantly
+            // (duration 0); let go and it springs open or closed.
+            AnimatedPositioned(
+              duration: _dragHeight == null
+                  ? const Duration(milliseconds: 420)
+                  : Duration.zero,
+              curve: kSnappyCurve,
+              left: 12,
+              right: wide ? null : 12,
+              width: wide ? 420 : null,
+              bottom: bottom,
+              height: height,
+              child: _sheet(c, max: max, height: height),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Small glass chips: what's on the map, and the depth legend on demand.
+  Widget _chipsAndLegend(AppColors c) {
+    final open = kEvacCenters.where((e) => e.open).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Positioned.fill(
-          child: _mapView(
-            EdgeInsets.fromLTRB(0, top + 130, 64, bottom + _panelHeight + 8),
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _layerChip(
+              c,
+              icon: AgosIcons.flood,
+              label: 'Reports ${_zones.length}',
+              on: _showZones,
+              onTap: () => setState(() => _showZones = !_showZones),
+            ),
+            _layerChip(
+              c,
+              icon: CupertinoIcons.house_alt_fill,
+              label: 'Shelters $open/${kEvacCenters.length}',
+              on: _showCenters,
+              onTap: () => setState(() => _showCenters = !_showCenters),
+            ),
+            _layerChip(
+              c,
+              icon: CupertinoIcons.info_circle,
+              label: 'Depth',
+              on: _legendOpen,
+              plain: true,
+              onTap: () => setState(() => _legendOpen = !_legendOpen),
+            ),
+          ],
         ),
-        Positioned(
-          top: top + 10,
-          left: 12,
-          right: 12,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    child: _header(c),
+        // AnimatedSize grows / shrinks smoothly when the legend appears.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topLeft,
+          child: !_legendOpen
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: SizedBox(
+                    width: 240,
+                    child: _glass(
+                      c,
+                      radius: 18,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                        child: _legend(c),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              _controls(c, zoomButtons: wide),
-            ],
-          ),
         ),
-        Positioned(
-          left: 12,
-          right: 12,
-          bottom: bottom,
-          height: _panelHeight,
-          child: Align(
-            alignment: Alignment.bottomLeft,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 620),
-              child: _bottomPanel(c),
+      ],
+    );
+  }
+
+  // A layer chip. On = solid (white in dark mode); off = glass with the
+  // label crossed out a little (faded). [plain] = a toggle that isn't a
+  // layer (the legend), shown as glass either way.
+  Widget _layerChip(
+    AppColors c, {
+    required IconData icon,
+    required String label,
+    required bool on,
+    required VoidCallback onTap,
+    bool plain = false,
+  }) {
+    final solid = on && !plain;
+    final fg = solid ? c.onInverse : c.textPrimary;
+    return Semantics(
+      button: true,
+      toggled: on,
+      label: label,
+      child: PressableScale(
+        onTap: onTap,
+        child: MapGlass(
+          radius: 18,
+          blur: !solid,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: solid
+                  ? c.inverse
+                  : c.surface.withValues(alpha: c.isDark ? 0.62 : 0.78),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: solid ? c.inverse : c.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 15, color: fg.withValues(alpha: on ? 1 : 0.5)),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: fg.withValues(alpha: on ? 1 : 0.55),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  // The bottom sheet: a handle and a one-line summary; dragged up, the
+  // reports (deepest first) and the shelters.
+  Widget _sheet(AppColors c, {required double max, required double height}) {
+    final open = kEvacCenters.where((e) => e.open).length;
+    void toggle() => setState(() => _sheetOpen = !_sheetOpen);
+    final header = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: toggle,
+      onVerticalDragUpdate: (d) =>
+          setState(() => _dragHeight = (height - d.delta.dy).clamp(_peek, max)),
+      onVerticalDragEnd: (d) => setState(() {
+        final v = d.primaryVelocity ?? 0; // + = moving down
+        final h = _dragHeight ?? height;
+        // A flick decides; a slow drag snaps to whichever end is closer.
+        _sheetOpen = v < -300 || (v <= 300 && h > (_peek + max) / 2);
+        _dragHeight = null;
+      }),
+      child: SizedBox(
+        height: _peek,
+        child: Column(
+          children: [
+            const SizedBox(height: 7),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: c.textSecondary.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const LiveDot(color: kDanger),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${_zones.length} reports · $open shelters open',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: kDisplayFont,
+                          color: c.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SampleBadge(),
+                    const SizedBox(width: 8),
+                    AnimatedRotation(
+                      turns: _sheetOpen ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 300),
+                      child: Icon(
+                        CupertinoIcons.chevron_up,
+                        size: 16,
+                        color: c.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Semantics(
+      label: _sheetOpen ? 'Reports list, open' : 'Reports list. Tap to open',
+      child: _glass(
+        c,
+        radius: 24,
+        child: Column(
+          children: [
+            header,
+            // The list fades in as the sheet rises.
+            Expanded(
+              child: Opacity(
+                opacity: ((height - _peek) / 120).clamp(0.0, 1.0),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: FieldLabel('Deepest first'),
+                    ),
+                    for (final z in _zones) _pinRow(c, z),
+                    const SizedBox(height: 8),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: FieldLabel('Evacuation centers'),
+                    ),
+                    for (final e in kEvacCenters) _centerRow(c, e),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -239,68 +453,6 @@ class _MapTabState extends State<MapTab> {
     return MapGlass(
       radius: radius,
       child: GlassCard(radius: radius, padding: EdgeInsets.zero, child: child),
-    );
-  }
-
-  // Title, live counts, and the two layer filters.
-  Widget _header(AppColors c) {
-    final open = kEvacCenters.where((e) => e.open).length;
-    return _glass(
-      c,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                const LiveDot(color: kDanger),
-                const SizedBox(width: 6),
-                Text(
-                  'Flood map',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const SampleBadge(),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '${_zones.length} reports · $open of ${kEvacCenters.length} '
-              'shelters open',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: c.textSecondary, fontSize: 12),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                SelectChip(
-                  label: 'Flood zones',
-                  icon: AgosIcons.flood,
-                  selected: _showZones,
-                  onTap: () => setState(() => _showZones = !_showZones),
-                ),
-                SelectChip(
-                  label: 'Evacuation',
-                  icon: CupertinoIcons.house_alt_fill,
-                  color: kSafe,
-                  selected: _showCenters,
-                  onTap: () => setState(() => _showCenters = !_showCenters),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -430,165 +582,6 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
-  // Legend + Report on top, then the reports as cards you can swipe.
-  Widget _bottomPanel(AppColors c) {
-    return _glass(
-      c,
-      radius: 26,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(child: _legend(c)),
-                const SizedBox(width: 12),
-                _reportButton(c),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, box) {
-                  // Each card ~240 wide, so the next one peeks in.
-                  final f = math.min(1.0, 248 / box.maxWidth);
-                  if (_cards == null || (f - _cardsFraction).abs() > 0.01) {
-                    final page = _cards?.hasClients == true
-                        ? _cards!.page?.round() ?? 0
-                        : 0;
-                    _cards?.dispose();
-                    _cards = PageController(
-                      viewportFraction: f,
-                      initialPage: page,
-                    );
-                    _cardsFraction = f;
-                  }
-                  return PageView.builder(
-                    controller: _cards,
-                    padEnds: false,
-                    itemCount: _zones.length,
-                    // Swiping to a card flies the map to that report.
-                    onPageChanged: (i) =>
-                        _focus(_zoneId(_zones[i]), _zones[i].point),
-                    itemBuilder: (context, i) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _reportCard(c, _zones[i]),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _reportCard(AppColors c, FloodZone z) {
-    final selected = _selected == _zoneId(z);
-    final level = FloodLevel.of(z.depthCm);
-    return PressableScale(
-      onTap: () => _showZone(context, z),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-        decoration: BoxDecoration(
-          color: c.surfaceAlt,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? c.accent : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            // The depth leads: it's what people need to know first.
-            SizedBox(
-              width: 58,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: level == FloodLevel.dry
-                              ? '0'
-                              : '${z.depthCm.round()}',
-                          style: TextStyle(
-                            color: z.risk.color,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -1,
-                            height: 1,
-                          ),
-                        ),
-                        TextSpan(
-                          text: ' cm',
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Container(
-                    height: 3,
-                    width: 30,
-                    decoration: BoxDecoration(
-                      color: z.risk.color,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    z.barangay,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${level.label} · ${z.updated}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              CupertinoIcons.chevron_right,
-              size: 16,
-              color: c.textSecondary.withValues(alpha: 0.6),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // The depth scale, low to high (same cut-offs as flood_depth.dart).
   Widget _legend(AppColors c) {
     Widget step(Color color, String label) => Expanded(
@@ -637,39 +630,6 @@ class _MapTabState extends State<MapTab> {
           ],
         ),
       ],
-    );
-  }
-
-  // Shortcut to Report incident (same screen as in Assistance).
-  Widget _reportButton(AppColors c) {
-    return Tooltip(
-      message: 'Report flooding',
-      child: PressableScale(
-        onTap: () => openReportIncident(context),
-        child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: c.inverse,
-            borderRadius: BorderRadius.circular(19),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(CupertinoIcons.plus, color: c.onInverse, size: 16),
-              const SizedBox(width: 6),
-              Text(
-                'Report',
-                style: TextStyle(
-                  color: c.onInverse,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 

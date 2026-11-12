@@ -513,6 +513,17 @@ enum Vote { up, down }
 /// when the page reloads.
 final ValueNotifier<Map<String, Vote>> myVotes = ValueNotifier({});
 
+/// The user's own barangay, picked in the profile menu ("My barangay").
+/// null = not picked yet. Weather and Reports put it first, and the bell
+/// marks alerts for it. Memory only for now (resets on reload); it becomes
+/// a column on the user's row once Supabase is connected.
+final ValueNotifier<String?> myBarangay = ValueNotifier(null);
+
+/// The user's answer to "Still flooded?" on each report, by barangay:
+/// true = still flooded, false = the water's gone. Only the user's OWN
+/// answers (no made-up totals). Memory only, like [myVotes].
+final ValueNotifier<Map<String, bool>> stillFlooded = ValueNotifier({});
+
 /// Thumbs up/down other users gave on this user's uploads (the profile
 /// card). Sample numbers until there's a server.
 const int kMyUpVotesReceived = 128;
@@ -523,7 +534,9 @@ class Hotline {
   final String number;
   final IconData icon;
   final Color color;
-  const Hotline(this.name, this.number, this.icon, this.color);
+  // Short label for the Help tab's one-tap call buttons.
+  final String short;
+  const Hotline(this.name, this.number, this.icon, this.color, this.short);
 }
 
 const List<Hotline> kHotlines = [
@@ -532,30 +545,35 @@ const List<Hotline> kHotlines = [
     '911',
     CupertinoIcons.phone_fill,
     kDanger,
+    'Emergency',
   ),
   Hotline(
     'Mabalacat CDRRMO',
     '0998-999-4357',
-    CupertinoIcons.shield_fill,
-    kGray,
+    CupertinoIcons.exclamationmark_shield_fill,
+    kTileTeal,
+    'CDRRMO',
   ),
   Hotline(
     'Bureau of Fire Protection',
     '0933-990-9960',
     CupertinoIcons.flame_fill,
-    kGray,
+    kTilePurple,
+    'Fire',
   ),
   Hotline(
     'Mabalacat Police (PNP)',
     '0998-598-5458',
     CupertinoIcons.shield_fill,
-    kGray,
+    kTileIndigo,
+    'Police',
   ),
   Hotline(
     'Mabalacat City Hall',
     '(045) 649-8620',
     CupertinoIcons.building_2_fill,
-    kGray,
+    kTileBlue,
+    'City Hall',
   ),
 ];
 
@@ -563,34 +581,66 @@ class SafetyTip {
   final IconData icon;
   final String title;
   final String body;
-  final Color color;
-  const SafetyTip(this.icon, this.title, this.body, this.color);
+  const SafetyTip(this.icon, this.title, this.body);
 }
 
-const List<SafetyTip> kSafetyTips = [
-  SafetyTip(
-    AgosIcons.landslide,
-    'Go to higher ground',
-    'Move early, before the water rises. Don\'t wait for it to reach your door.',
-    kBlue,
+/// Flood safety advice, grouped by when it matters (the Help tab shows one
+/// group at a time). General guidance, not data.
+const List<(String, List<SafetyTip>)> kSafetyPhases = [
+  (
+    'Before',
+    [
+      SafetyTip(
+        CupertinoIcons.phone_fill,
+        'Save the hotlines now',
+        'Put CDRRMO and your barangay hall in your contacts before the rain starts.',
+      ),
+      SafetyTip(
+        CupertinoIcons.house_alt_fill,
+        'Know your evacuation center',
+        'Find the nearest one and walk the route once while the roads are dry.',
+      ),
+    ],
   ),
-  SafetyTip(
-    CupertinoIcons.bolt_slash_fill,
-    'Switch off the power',
-    'Turn off the main breaker if water may enter your home.',
-    kCaution,
+  (
+    'During',
+    [
+      SafetyTip(
+        AgosIcons.landslide,
+        'Go to higher ground',
+        "Move early, before the water rises. Don't wait for it to reach your door.",
+      ),
+      SafetyTip(
+        CupertinoIcons.bolt_slash_fill,
+        'Switch off the power',
+        'Turn off the main breaker if water may enter your home.',
+      ),
+      SafetyTip(
+        CupertinoIcons.nosign,
+        "Don't walk in floodwater",
+        'It can hide open drains, sharp debris, strong currents, and live wires.',
+      ),
+    ],
   ),
-  SafetyTip(
-    CupertinoIcons.nosign,
-    'Don\'t walk in floodwater',
-    'It can hide open drains, sharp debris, strong currents, and live wires.',
-    kDanger,
-  ),
-  SafetyTip(
-    CupertinoIcons.bag_fill,
-    'Keep a go-bag ready',
-    'Water, food, flashlight, medicines, IDs, and a power bank.',
-    kSafe,
+  (
+    'After',
+    [
+      SafetyTip(
+        CupertinoIcons.checkmark_shield_fill,
+        "Go home only when it's safe",
+        'Wait until local officials say your area is clear.',
+      ),
+      SafetyTip(
+        CupertinoIcons.bolt_fill,
+        'Stay away from fallen wires',
+        'Report them to the barangay or the power company. Never touch them.',
+      ),
+      SafetyTip(
+        CupertinoIcons.drop_fill,
+        'Boil water before drinking',
+        'Floodwater can get into the water supply. Clean anything it touched.',
+      ),
+    ],
   ),
 ];
 

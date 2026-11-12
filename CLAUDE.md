@@ -14,11 +14,53 @@ can mirror them.
 ## Layout
 
 - `lib/main.dart` only starts the app. `lib/theme.dart` has the colors,
-  font (Inter, Latin-only subset bundled in `assets/fonts/`, made with
-  fontTools' `pyftsubset`), and `RiskLevel`.
-- `lib/screens/`: one file per screen: login, home shell (top bar + bottom
-  nav), the five tabs (home, map, alerts, assistance, more), plus
-  evacuation centers, report incident, settings, and about/help.
+  fonts and `RiskLevel`. Fonts: Inter for text, Inter Tight for titles and
+  big numbers (`kDisplayFont`); both Latin-only static cuts in
+  `assets/fonts/`, made with fontTools (`instancer` for the variable Inter
+  Tight, then `pyftsubset`). Add new title text with
+  `fontFamily: kDisplayFont`.
+- **Tabs (Nov 2026 redesign): Weather · Map · Reports · Help.**
+  **Phone bottom nav (Nov 12 2026):** the floating glass pill, with a
+  behavior borrowed from Clash Royale: the open tab grows wider, its icon
+  gets bigger and pops up out of the pill, with its name and ‹ › marks
+  (decoration only); closed tabs show only their icon, slightly faded.
+  (A full Clash Royale restyle was tried and dropped the same day: Adrian
+  kept the glass / iOS look.) The icons are drawn 2D illustrations, iOS style
+  (soft gradients, no outlines, not cartoonish), in `tools/nav_icons.js`,
+  rendered by `python tools/nav_icons.py [--preview]` to
+  `assets/images/nav_*.png`: edit the JS, never the PNGs. The tablet /
+  desktop top nav still uses CupertinoIcons.
+  `lib/screens/`: `home_shell.dart` (top bar: logo, bell, avatar menu;
+  the bottom nav; `showNewActions` = the + fan: Report flood, I'm safe,
+  SOS, opened by `NewActionsButton`, which sits in the Reports tab's
+  header), `weather_tab.dart` (Nov 12 2026 redesign after the
+  teacher called the card stack generic: greeting, high-alert strip, the
+  **sky card scrubbable through the next 24 h** (drag the strip = rain bars
+  + temperature line; sky color, rain/stars, numbers and Tugak all switch
+  to that hour; water at the bottom rises with the rain adding up, full at
+  30 mm = the high-outlook rule), the **flood outlook** (rain forecast AND
+  "reported now" side by side, so it never says "low risk" next to a
+  flood alert), **"Your city right now"** (`lib/widgets/city_map.dart`:
+  the landing's city outline + all 27 barangays drawn by hand, flooded
+  ones pulsing; tap one for its report, "Make it mine", "View on map"),
+  and the 5-day forecast with range bars. The old 24 h rain card and
+  12-hour strip are gone: the scrubber replaced both), `map_tab.dart`, `reports_tab.dart` (the flood pins as posts,
+  filters, "Still flooded?"), `assistance_tab.dart` (the **Help** tab, Nov 12 2026
+  redesign: ONE focal point, the big hold-to-call-911 SOS, the only red
+  on the page; every other icon is the neutral `_Glyph`, accent = kBlue,
+  green only on "I'm safe". Then Hotlines (CDRRMO, Police, "All" sheet),
+  nearest shelter, and "Be ready": a Before/During/After timeline with
+  the go-bag under Before (ticks saved via shared_preferences) and the
+  NWS "Turn Around, Don't Drown" depth diagram under During. Desktop =
+  two full-width bands (SOS | hotlines + shelter at equal height, then
+  Be ready with tips side by side and the go-bag in 3 columns), not two
+  long columns, which ended uneven. Don't bring
+  back rainbow icon colors or per-section entrance animations), `notifications.dart` (the old Alerts page,
+  now the bell's sheet), plus evacuation centers, report incident,
+  settings, about/help. **There is no More tab**: profile, My barangay,
+  Dark mode, Settings, Help, About, Log out live in the avatar menu
+  (`_ProfileMenu`, every screen size). `?tab=` takes weather | map |
+  reports | help (old home / assistance still work).
 - `lib/widgets/common.dart`: shared building blocks (AppCard,
   GradientButton, FadeSlideIn, AnimatedWaves, showAppSheet...). Reuse
   these instead of restyling from scratch. `lib/widgets/links.dart`:
@@ -38,21 +80,25 @@ can mirror them.
 - Phone / tablet / desktop layouts: `lib/widgets/responsive.dart`
   (breakpoints 600 and 1024, `pagePadding`, `TwoColumns`). Phones keep
   the bottom nav; tablets and desktops get a top nav (icons only on
-  tablets) with a profile menu instead of the More tab, and
+  tablets) with the + as a round button next to the bell, and
   `showAppSheet` opens a centered popup instead of a bottom sheet.
-  Desktop has its own layouts for Home (two columns), Map (side panel),
-  Alerts (list + details), Assistance, and Login (photo panel).
-- Style (Nov 2026): iPhone-style glass, black and white with one blue
-  accent (`kBlue`; reference: deckai.app). Dark = true black, light = iOS
-  gray `#F2F2F7`. Color only means something: blue = interactive,
-  green/amber/red = risk, red = emergency. Decorative colors are `kGray`.
-  Cards are `AppCard` (see-through fill + `GlassEdgePainter` lit edge, no
-  blur, since a blur over a plain background shows nothing). Real blur
+  Desktop has its own layouts for Weather (two columns), Map (side panel),
+  Reports (3-column grid) and Help (two columns).
+- Style "Graphite" (Nov 2026 redesign; Adrian: "no rules, make it feel
+  PREMIUM, not a hackers' hideout"): warm graphite, not pure black (dark
+  `#111113`, default) and warm off-white light (`#F4F3F0`); iOS blue
+  `kBlue` accent; iOS tile colors for icons in lists and cards
+  (`kTileBlue/Indigo/Teal/Purple/Gray`, used through `IconBadge(...,
+  squircle: true)`, like the Settings app). Green / amber / red stay
+  reserved for flood risk and emergencies, never decoration. The Weather
+  tab's sky card follows the real sky (`weatherGradient`: blue day, slate
+  rain, storm gray, indigo night) with rain streaks / stars. Cards are
+  `AppCard` (see-through fill + `GlassEdgePainter` lit edge, no blur,
+  since a blur over a plain background shows nothing). Real blur
   (`kGlassBlur`, `GlassCard`) only where sharp content moves behind:
   bottom nav, sheets, popups, map overlays (over the web map: `MapGlass`,
-  see Known issues). Main buttons are
-  `PrimaryButton` (white pill on dark, black on light; `color: kDanger`
-  for urgent ones). No colored glows, no gradient blobs.
+  see Known issues). Main buttons are `PrimaryButton` (white pill on dark,
+  black on light; `color: kDanger` urgent, `kSafe` for "I'm safe").
   `GlassEdgePainter` lights each edge point by how much it faces a light
   at the top left (model learned from QuickLiquid's specular.ts). Real
   liquid-glass refraction is impossible here: Flutter web has no
@@ -60,6 +106,27 @@ can mirror them.
   retry it. Taps: every pressable thing goes through `PressableScale`
   (spring squish, QuickLiquid's spring numbers: `kSpringSnappy/Bouncy`,
   `kSnappyCurve/kBouncyCurve`); no Material ripples (`NoSplash`).
+- **Tugak** (Kapampangan for frog), the mascot. Nov 12 2026 redraw in
+  iOS / Animoji style, because the old comic look (black outlines, cel
+  shading, shades on his head) clashed with the glass UI: soft shading,
+  NO outlines, one light from the top left (same as GlassEdgePainter),
+  warm bronze skin, glossy gold eyes with a toad's horizontal pupils,
+  calm half-lidded look, navy rescue jacket; hood up in rain/storm, cool
+  moonlight at night. No shades any more. Adrian wants him cool /
+  grown-up, NOT cute or kiddy (rejected: round blushing frog, bright
+  green, a visor hiding the eyes, the Pepe look, and a flat SF-Symbol
+  line frog that read as a kids' app). Drawn in `tools/tugak.js` (SVG),
+  rendered by `python tools/tugak.py` to
+  `assets/images/tugak_{fine,rain,storm,night}.png` in full color (a
+  256-color palette bands the gradients; `--preview` for a sheet): edit
+  the JS and rerun, never the PNGs. `lib/widgets/tugak.dart`:
+  mood + line from REAL weather / the latest high alert (`tugakMoodFor`,
+  `tugakLine`; per forecast hour `tugakMoodAt`, `tugakLineAt`), tap = hop
+  + a tip. On the sky card he sits beside the temperature (`beside:`)
+  with his bubble under both. Voice: deadpan, what to do first, a dry
+  joke only when nothing is wrong; on a high alert no jokes at all, and
+  only the steps (the red strip already names the alert).
+  He may become the logo later.
 - Icons (Nov 2026): `CupertinoIcons` (SF Symbols style) only, never
   Material `Icons.*`. Apple's real SF Symbols can't be used (license is
   Apple platforms only). Flood things Cupertino lacks (flood, waves,
@@ -69,7 +136,8 @@ can mirror them.
   Edit the script, never `AgosIcons.ttf` / `agos_icons.dart`. The thin
   `WaterLines` pattern is the signature. Local identity: real local
   photos (`LocalPhoto` in demo_data.dart, credits shown on the photo and
-  listed on About) and Kapampangan greetings (Home banner, landing page).
+  listed on About) and Kapampangan greetings (Weather tab, landing page;
+  same hours: abak 5-11, ugtu 11-13, gatpanapun 13-18, bengi 18-5).
 - **No login screen in the app.** Logging in happens on the landing page
   (`landing/`, plain HTML/CSS/JS), whose popup opens the app as
   `app/?as=user|guest&theme=light|dark` (optional `&tab=map` etc.).
@@ -79,7 +147,12 @@ can mirror them.
 - Roles: Admin, Registered User, Guest. For now only guest vs logged-in
   exists: `isGuest` (demo_data.dart, set from `?as=`). When a guest taps
   something they can't do, call `showLoginRequired` (account.dart).
-  Votes on flood pins live in `myVotes` (memory only).
+  Votes on flood pins live in `myVotes`, "Still flooded?" answers in
+  `stillFlooded`, the user's barangay in `myBarangay` (all memory only
+  until Supabase; only the user's OWN answers, never made-up totals).
+- "I'm safe" (`lib/widgets/check_in.dart`): shows the message, then the
+  browser's share menu (`lib/services/share_web.dart`, Web Share API); no
+  share menu (desktop, tests) = copy to clipboard. Front-end only.
 - No real offices as the app's admin: the admins aren't confirmed yet, so
   the app says "Admin" (`kAdminSource`) and calls itself an unofficial demo.
   Real emergency hotlines (CDRRMO, PNP...) stay as they are.
@@ -89,17 +162,27 @@ can mirror them.
   data; only bring it back with a real, working source.
 - Flood pins are removed 14 days after their photo was taken
   (`kPinLifetime`); the map only shows `activeFloodZones`.
-- Each pin has an uploader (`kUploaders`, sample names). The Home feed
-  ("Latest flood reports") shows the pins as posts; `VoteBar` and
-  `PostedBy` / `showUserProfile` (lib/widgets/) are shared by the feed
+- Each pin has an uploader (`kUploaders`, sample names). The Reports tab
+  shows the pins as posts (`ReportPost`); `VoteBar` and
+  `PostedBy` / `showUserProfile` (lib/widgets/) are shared by the posts
   and the pin popup. "View on map" sets `focusedZone`, which the Map tab
   listens to.
 - `lib/widgets/flood_depth.dart`: flood depth levels (ankle → over head),
   cm/ft, the gauge drawing, and the depth → risk cut-offs (≤20 cm normal,
   ≤50 moderate, else high) that the map legend also shows.
-- `test/widget_test.dart` checks the app opens on Home and that every screen
+- `test/widget_test.dart` checks the app opens on Weather and that every screen
   renders at phone size without overflow. Use `pump()`, not
-  `pumpAndSettle()`: several animations repeat forever.
+  `pumpAndSettle()`: several animations repeat forever. After a tap that
+  opens a popup or moves something, pump twice (`pump()` then
+  `pump(1 s)`): an animation only starts counting at its first frame, and
+  a popup ignores taps until it's fully open.
+- Weather extras: the scrubber uses hourly `precipitation`, humidity and
+  wind; Tugak's per-hour lines (`tugakLineAt`) use PAGASA's rain bands
+  (2.5 / 7.5 mm per hour); "rain in
+  the next 2 hours" uses Open-Meteo `minutely_15` (model data, not radar).
+  No rain radar on the map: RainViewer's free tier is too coarse at city
+  zoom (checked Nov 12 2026). `test/fixtures/weather.json` is a saved real
+  response: re-save it when the weather request changes.
 
 ## Running
 
@@ -120,11 +203,11 @@ can mirror them.
   Flutter's `flutter-first-frame`). `index.html` also preloads
   `main.dart.js`, the fonts, and the asset manifests. If you add or rename
   a font, update those preload links too.
-- Every page except Home is deferred (downloaded on first use,
-  with a skeleton meanwhile): Map, Alerts, Assistance, More, Report,
-  Settings, Help, About. Always open them through
-  `lib/screens/deferred_screens.dart` (never import those screen files
-  from Home, the shell, or shared widgets), and keep `image_picker`
+- Every page except Weather is deferred (downloaded on first use,
+  with a skeleton meanwhile): Map, Reports, Help (assistance_tab.dart),
+  the bell's notifications, SOS, Report, Settings, Help & FAQ, About.
+  Always open them through `lib/screens/deferred_screens.dart` (never
+  import those screen files from Weather, the shell, or shared widgets), and keep `image_picker`
   imports out of every other file, or it'll end up back in the first
   download. (`flutter_map` lives only in `agos_map_io.dart`/`map_tiles.dart`,
   which the web build never compiles; MapLibre's JS only loads when a map
@@ -148,8 +231,9 @@ screenshot — use a branch for risky changes.
   (Home in front, Map behind) with real app screenshots in
   `landing/img/{home,map}-{dark,light}.webp` (390 wide at 2x, taken with
   the status bar left out; the page draws its own), slightly blurred on
-  purpose. Retake them when the Home or Map tab changes visibly (the Map
-  ones were retaken Nov 12 2026 in 3D; the Home ones are older).
+  purpose. Retake them when the Weather or Map tab changes visibly (the
+  Map ones were retaken Nov 12 2026 in 3D; the `home-*` ones still show
+  the pre-redesign Home and need retaking from the Weather tab).
 - The weather card and flood outlook chip popping out of the front phone
   are live (Open-Meteo, same request and rules as weather.dart, ported to
   landing.js). So are the numbers in "How it works" cards 1-2. Keep the

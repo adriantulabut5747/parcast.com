@@ -8,12 +8,12 @@ import 'account.dart';
 // first time it's needed. The map package is big, so the Map tab and the
 // Report incident screen (which has a map preview and photo picker) stay
 // out of the first download. Always open them through this file.
-import 'alerts_tab.dart' deferred as alerts;
 import 'assistance_tab.dart' deferred as assistance;
 import 'info_screens.dart' deferred as info;
 import 'map_tab.dart' deferred as map_tab;
-import 'more_tab.dart' deferred as more;
+import 'notifications.dart' deferred as notifications;
 import 'report_incident_screen.dart' deferred as report;
+import 'reports_tab.dart' deferred as reports;
 import 'settings_screen.dart' deferred as settings;
 
 /// The Map tab, downloaded the first time the tab is opened.
@@ -47,8 +47,9 @@ void openReportIncident(BuildContext context) {
   );
 }
 
-/// Downloads the Map tab and Report incident code in the background, so
-/// they open instantly later. Errors are ignored: if it fails, they'll
+/// Downloads the other tabs' code (Map, Reports, Help), the bell's
+/// notifications and Report incident in the background, so they open
+/// instantly later. Errors are ignored: if it fails, they'll
 /// simply download when first opened, as before.
 ///
 /// Calling loadLibrary() again later is fine: once a library has been
@@ -59,6 +60,9 @@ Future<void> preloadDeferredScreens() async {
   await Future.wait([
     map_tab.loadLibrary().then((_) {}, onError: (Object _) {}),
     report.loadLibrary().then((_) {}, onError: (Object _) {}),
+    reports.loadLibrary().then((_) {}, onError: (Object _) {}),
+    assistance.loadLibrary().then((_) {}, onError: (Object _) {}),
+    notifications.loadLibrary().then((_) {}, onError: (Object _) {}),
   ]);
 }
 
@@ -69,23 +73,31 @@ Future<void> preloadDeferredScreens() async {
 // that it opens instantly.
 // ------------------------------------------------------------
 
-Widget deferredAlertsTab() => DeferredView(
-  load: alerts.loadLibrary,
-  builder: () => alerts.AlertsTab(),
+Widget deferredReportsTab() => DeferredView(
+  load: reports.loadLibrary,
+  builder: () => reports.ReportsTab(),
   placeholder: const ListPageSkeleton(),
 );
 
-Widget deferredAssistanceTab() => DeferredView(
+/// The Help tab (file: assistance_tab.dart).
+Widget deferredHelpTab() => DeferredView(
   load: assistance.loadLibrary,
   builder: () => assistance.AssistanceTab(),
   placeholder: const ListPageSkeleton(),
 );
 
-Widget deferredMoreTab() => DeferredView(
-  load: more.loadLibrary,
-  builder: () => more.MoreTab(),
-  placeholder: const ListPageSkeleton(),
-);
+/// The bell: opens the notifications sheet (downloading it the first time;
+/// it's small, so there's no skeleton, it just opens a moment later).
+Future<void> openNotifications(BuildContext context) async {
+  await notifications.loadLibrary();
+  if (context.mounted) notifications.showNotifications(context);
+}
+
+/// The SOS sheet (hotlines + request rescue), from the + button.
+Future<void> openSos(BuildContext context) async {
+  await assistance.loadLibrary();
+  if (context.mounted) assistance.showSosSheet(context);
+}
 
 void openSettings(BuildContext context) => _openPage(
   context,
