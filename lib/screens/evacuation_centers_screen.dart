@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
 import '../theme.dart';
@@ -51,7 +52,7 @@ class _EvacuationCentersScreenState extends State<EvacuationCentersScreen> {
                       '$openCount',
                       'Open now',
                       kSafe,
-                      Icons.door_front_door_rounded,
+                      CupertinoIcons.checkmark_circle_fill,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -60,8 +61,8 @@ class _EvacuationCentersScreenState extends State<EvacuationCentersScreen> {
                       c,
                       '$spaces',
                       'Spaces left',
-                      kSkyBlue,
-                      Icons.groups_rounded,
+                      kBlue,
+                      CupertinoIcons.person_3_fill,
                     ),
                   ),
                 ],
@@ -178,7 +179,7 @@ class EvacCenterCard extends StatelessWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: e.open
-                              ? [kOceanBlue, kSkyBlue]
+                              ? [kGraphite, Color(0xFF3A3A3C)]
                               : [
                                   const Color(0xFF3B4658),
                                   const Color(0xFF5B6678),
@@ -272,7 +273,7 @@ class EvacCenterCard extends StatelessWidget {
                       Row(
                         children: [
                           Icon(
-                            Icons.directions_rounded,
+                            CupertinoIcons.arrow_up_right_diamond_fill,
                             size: 16,
                             color: c.accent,
                           ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/agos_icons.dart';
 
 /// ============================================================
 /// SETTINGS — appearance, notifications, location
@@ -39,11 +41,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 builder: (context, mode, _) => Row(
                   children: [
                     for (final (m, icon, label) in [
-                      (ThemeMode.light, Icons.light_mode_rounded, 'Light'),
-                      (ThemeMode.dark, Icons.dark_mode_rounded, 'Dark'),
+                      (ThemeMode.light, CupertinoIcons.sun_max_fill, 'Light'),
+                      (ThemeMode.dark, CupertinoIcons.moon_fill, 'Dark'),
                       (
                         ThemeMode.system,
-                        Icons.brightness_auto_rounded,
+                        CupertinoIcons.circle_lefthalf_fill,
                         'System',
                       ),
                     ]) ...[
@@ -61,7 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     _switch(
                       c,
-                      Icons.flood_rounded,
+                      AgosIcons.flood,
                       'Flood alerts',
                       'Water levels and flood warnings',
                       _floodAlerts,
@@ -70,7 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _divider(c),
                     _switch(
                       c,
-                      Icons.thunderstorm_rounded,
+                      CupertinoIcons.cloud_bolt_rain_fill,
                       'Weather advisories',
                       'Heavy rain and storms',
                       _weatherAlerts,
@@ -79,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _divider(c),
                     _switch(
                       c,
-                      Icons.campaign_rounded,
+                      CupertinoIcons.exclamationmark_bubble_fill,
                       'Community reports',
                       'Incidents reported near you',
                       _community,
@@ -88,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _divider(c),
                     _switch(
                       c,
-                      Icons.volume_up_rounded,
+                      CupertinoIcons.speaker_2_fill,
                       'Alert sound',
                       'Play a sound for high alerts',
                       _sound,
@@ -124,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: _switch(
                   c,
-                  Icons.my_location_rounded,
+                  CupertinoIcons.location_fill,
                   'Share my location',
                   'Helps rescuers find you faster',
                   _location,
@@ -171,32 +173,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          gradient: selected ? kBrandGradient : null,
-          color: selected ? null : c.surface,
+          color: selected ? c.inverse : c.surfaceAlt,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: selected ? Colors.transparent : c.border),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: kSkyBlue.withValues(alpha: 0.35),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
         ),
         child: Column(
           children: [
             Icon(
               icon,
-              color: selected ? Colors.white : c.textSecondary,
+              color: selected ? c.onInverse : c.textSecondary,
               size: 24,
             ),
             const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : c.textSecondary,
+                color: selected ? c.onInverse : c.textSecondary,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
               ),

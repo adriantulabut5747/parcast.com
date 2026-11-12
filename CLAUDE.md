@@ -3,10 +3,19 @@
 Flutter flood-monitoring app for Mabalacat City, Pampanga. A school group
 project: Adrian writes all the code, his groupmates only do the paperwork.
 
+**Two builds of the same system (Nov 2026).** The project counts for two
+subjects, so the whole app gets built twice: this Flutter app first, then
+a Laravel copy of everything, done only after the Flutter one is finished.
+Both will share one **Supabase** database (not connected yet; demo data
+until then). Work on Flutter only for now, but keep data shapes simple and
+named the way a database table would be, so the Laravel build and Supabase
+can mirror them.
+
 ## Layout
 
 - `lib/main.dart` only starts the app. `lib/theme.dart` has the colors,
-  font (Plus Jakarta Sans, bundled in `assets/fonts/`), and `RiskLevel`.
+  font (Inter, Latin-only subset bundled in `assets/fonts/`, made with
+  fontTools' `pyftsubset`), and `RiskLevel`.
 - `lib/screens/`: one file per screen: login, home shell (top bar + bottom
   nav), the five tabs (home, map, alerts, assistance, more), plus
   evacuation centers, report incident, settings, and about/help.
@@ -33,7 +42,31 @@ project: Adrian writes all the code, his groupmates only do the paperwork.
   `showAppSheet` opens a centered popup instead of a bottom sheet.
   Desktop has its own layouts for Home (two columns), Map (side panel),
   Alerts (list + details), Assistance, and Login (photo panel).
-- Style ("calm water"): no glows or gradient-filled tiles; the thin
+- Style (Nov 2026): iPhone-style glass, black and white with one blue
+  accent (`kBlue`; reference: deckai.app). Dark = true black, light = iOS
+  gray `#F2F2F7`. Color only means something: blue = interactive,
+  green/amber/red = risk, red = emergency. Decorative colors are `kGray`.
+  Cards are `AppCard` (see-through fill + `GlassEdgePainter` lit edge, no
+  blur, since a blur over a plain background shows nothing). Real blur
+  (`kGlassBlur`, `GlassCard`) only where sharp content moves behind:
+  bottom nav, sheets, popups, map overlays (over the web map: `MapGlass`,
+  see Known issues). Main buttons are
+  `PrimaryButton` (white pill on dark, black on light; `color: kDanger`
+  for urgent ones). No colored glows, no gradient blobs.
+  `GlassEdgePainter` lights each edge point by how much it faces a light
+  at the top left (model learned from QuickLiquid's specular.ts). Real
+  liquid-glass refraction is impossible here: Flutter web has no
+  `ImageFilter.shader` (`isShaderFilterSupported` is false), so don't
+  retry it. Taps: every pressable thing goes through `PressableScale`
+  (spring squish, QuickLiquid's spring numbers: `kSpringSnappy/Bouncy`,
+  `kSnappyCurve/kBouncyCurve`); no Material ripples (`NoSplash`).
+- Icons (Nov 2026): `CupertinoIcons` (SF Symbols style) only, never
+  Material `Icons.*`. Apple's real SF Symbols can't be used (license is
+  Apple platforms only). Flood things Cupertino lacks (flood, waves,
+  lifebuoy, boat, landslide) are `AgosIcons`, built by
+  `python tools/make_icons.py` (needs fonttools + skia-pathops;
+  `--preview out.png` shows them next to Cupertino to check weight).
+  Edit the script, never `AgosIcons.ttf` / `agos_icons.dart`. The thin
   `WaterLines` pattern is the signature. Local identity: real local
   photos (`LocalPhoto` in demo_data.dart, credits shown on the photo and
   listed on About) and Kapampangan greetings (Home banner, landing page).
@@ -75,7 +108,14 @@ project: Adrian writes all the code, his groupmates only do the paperwork.
   then the Ports tab → port 8080.
 - Add `--release` to preview at real size (~4 MB instead of ~100 MB for
   debug), but then there's no hot reload.
-- The loading screen (logo filling with water, bubbles, waves) is plain
+- Logo (Nov 2026, "Current Alert"): an exclamation mark whose dot is a
+  kBlue wave; wordmark = mark + "agosalert." (Inter ExtraBold, outlined)
+  with a blue dot. App icon = the mark on a black rounded square. SVG
+  masters + usage guide in `brand/`. All logo files (brand SVGs, app,
+  favicon, PWA icons, landing copies) come from `python tools/make_logo.py`
+  (needs Chrome, Pillow, fontTools): edit the script, never the outputs.
+- The loading screen (the logo's drop filling with blue water, bubbles,
+  faint wave lines; follows `?theme=light`) is plain
   HTML/CSS in `web/index.html` (Adrian wants no skeleton card there), driven by `web/flutter_bootstrap.js` (hidden on
   Flutter's `flutter-first-frame`). `index.html` also preloads
   `main.dart.js`, the fonts, and the asset manifests. If you add or rename
@@ -84,9 +124,11 @@ project: Adrian writes all the code, his groupmates only do the paperwork.
   with a skeleton meanwhile): Map, Alerts, Assistance, More, Report,
   Settings, Help, About. Always open them through
   `lib/screens/deferred_screens.dart` (never import those screen files
-  from Home, the shell, or shared widgets), and keep `flutter_map` /
-  `image_picker` imports out of every other file, or they'll end up back
-  in the first download.
+  from Home, the shell, or shared widgets), and keep `image_picker`
+  imports out of every other file, or it'll end up back in the first
+  download. (`flutter_map` lives only in `agos_map_io.dart`/`map_tiles.dart`,
+  which the web build never compiles; MapLibre's JS only loads when a map
+  is first shown.)
 - In-app loading placeholders live in `lib/widgets/skeleton.dart`.
 - Check before committing: `flutter analyze` and `flutter test`.
 
@@ -106,7 +148,8 @@ screenshot — use a branch for risky changes.
   (Home in front, Map behind) with real app screenshots in
   `landing/img/{home,map}-{dark,light}.webp` (390 wide at 2x, taken with
   the status bar left out; the page draws its own), slightly blurred on
-  purpose. Retake them when the Home or Map tab changes visibly.
+  purpose. Retake them when the Home or Map tab changes visibly (the Map
+  ones were retaken Nov 12 2026 in 3D; the Home ones are older).
 - The weather card and flood outlook chip popping out of the front phone
   are live (Open-Meteo, same request and rules as weather.dart, ported to
   landing.js). So are the numbers in "How it works" cards 1-2. Keep the
@@ -129,15 +172,45 @@ screenshot — use a branch for risky changes.
 
 ## Known issues
 
-- Maps use `flutter_map` with Esri's free Canvas tiles (light/dark gray +
-  a labels layer, no key) in `lib/widgets/map_tiles.dart`. Don't use
-  CARTO (stamps "API KEY REQUIRED") or tile.openstreetmap.org (blocks
-  flutter_map web apps with "Access blocked"). When checking a tile
-  source, look at the actual image, not just the HTTP status.
-- The Map tab is locked to `kMabalacatBounds` (demo_data.dart) with a
-  minimum zoom of 13. A test checks that it can't be dragged outside.
-- In the dark theme, the dark-navy "alert" in the logos is hard to read.
-  Adrian chose to keep it as-is.
+- **The map (Nov 12 2026) is MapLibre GL JS in the browser**, not
+  flutter_map. `AgosMap` (`lib/widgets/agos_map.dart`) has two versions
+  picked at compile time: `agos_map_web.dart` (puts a `<div>` on the page,
+  `web/agos_map.js` draws the map in it: pins are DOM markers, flood rings,
+  3D buildings + terrain that fade in with the tilt, the 3D button,
+  compass) and `agos_map_io.dart` (flutter_map + Esri, flat; only for
+  `flutter test` and phone builds). Opens flat; 3D = tilt.
+- **All map files ship with the app** in `web/map/` (~30 MB: Mabalacat
+  vector tiles from Protomaps/OpenStreetMap at zoom 8-15, Terrarium
+  elevation tiles, Inter label glyphs, `style-{light,dark}.json`, pinned
+  MapLibre 5.24). All generated by `python tools/make_map.py [step]`:
+  edit the script (colors are in PALETTE), never the outputs. Rerun
+  `tiles` now and then for new roads/buildings. To tweak the look
+  visually, open a style in Maputnik, then copy values back into the
+  script. Tile URLs must stay absolute in JS (`transformRequest`): tiles
+  load in a Web Worker where relative URLs break.
+- **Anything floating over the web map must be wrapped in `MapGlass`**
+  (`lib/widgets/map_glass.dart`). The map is real HTML, so Flutter's blur
+  can't see it and taps would also reach the map; MapGlass puts a CSS
+  `backdrop-filter` div behind the widget that fixes both. The shell's
+  bottom nav and the top bar use it while the Map tab is open. Chrome on
+  1x screens loses the blur when Flutter places the div with a CSS
+  transform, so MapGlass swaps that for left/top (`_untransform`).
+- The Map tab fills the whole window, under the glass top bar (phone and
+  web). HomeShell passes the bar's height down as MediaQuery top padding
+  (other tabs just start below the bar), so map overlays use
+  `MediaQuery.paddingOf(context).top`, and any ListView in the Map tab
+  needs `padding: EdgeInsets.zero`. Desktop: the side panel, controls and
+  legend all float on the map as glass. Behind sheets/popups the
+  map blurs itself and stops taking input (`ModalRoute.isCurrent`); on a
+  hidden tab it ignores taps (`TickerMode`).
+- The Map tab is locked to `kCityBounds` (demo_data.dart, same box as
+  `CITY` in make_map.py) with a minimum zoom of 13. A test checks the
+  fallback map can't be dragged outside.
+- Don't use CARTO (stamps "API KEY REQUIRED") or tile.openstreetmap.org
+  (blocks web apps) for the fallback. When checking a tile source, look at
+  the actual image, not just the HTTP status.
+- Headless Chrome shots of the map: use CDP with real time and
+  `--use-angle=swiftshader` (WebGL), not `--virtual-time-budget`.
 
 ## Working with Adrian
 

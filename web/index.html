@@ -11,7 +11,7 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AgosAlert: live weather, flood outlook, and emergency help for Mabalacat City, Pampanga.">
-  <meta name="theme-color" content="#0B1130">
+  <meta name="theme-color" content="#000000">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -36,121 +36,109 @@
   <link rel="preload" href="assets/AssetManifest.bin.json" as="fetch" crossorigin>
   <link rel="preload" href="assets/FontManifest.json" as="fetch" crossorigin>
   <link rel="preload" href="assets/fonts/MaterialIcons-Regular.otf" as="fetch" crossorigin>
-  <link rel="preload" href="assets/assets/fonts/PlusJakartaSans-Regular.ttf" as="fetch" crossorigin>
-  <link rel="preload" href="assets/assets/fonts/PlusJakartaSans-SemiBold.ttf" as="fetch" crossorigin>
-  <link rel="preload" href="assets/assets/fonts/PlusJakartaSans-Bold.ttf" as="fetch" crossorigin>
-  <link rel="preload" href="assets/assets/fonts/PlusJakartaSans-ExtraBold.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/packages/cupertino_icons/assets/CupertinoIcons.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/AgosIcons.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Inter-Regular.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Inter-SemiBold.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Inter-Bold.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Inter-ExtraBold.ttf" as="fetch" crossorigin>
 
   <title>AgosAlert · Mabalacat City</title>
   <link rel="manifest" href="manifest.json">
 
   <!--
-    LOADING SCREEN: the logo in a round "water drop" that fills up as the
-    app loads. Plain HTML/CSS, so it shows instantly while Flutter
-    downloads. flutter_bootstrap.js raises the water at each loading step
-    and fades this out once the app has drawn its first frame.
+    LOADING SCREEN: the logo (white circle + black drop), and the drop
+    fills with blue water as the app loads. Plain HTML/CSS, so it shows
+    instantly while Flutter downloads. flutter_bootstrap.js raises the water
+    at each loading step and fades this out once the app has drawn its
+    first frame. Follows ?theme=light (set by the landing page).
   -->
+  <script>
+    if (/[?&]theme=light\b/.test(location.search)) document.documentElement.className = 'light';
+  </script>
   <style>
-    html, body { margin: 0; height: 100%; background: #060911; }
+    @font-face { font-family: Inter; font-weight: 800; font-display: block;
+      src: url('assets/assets/fonts/Inter-ExtraBold.ttf'); }
+    @font-face { font-family: Inter; font-weight: 400; font-display: block;
+      src: url('assets/assets/fonts/Inter-Regular.ttf'); }
+    :root { --bg: #000; --text: #F5F5F7; --muted: #98989F; --line: rgba(255,255,255,.14); }
+    :root.light { --bg: #F2F2F7; --text: #1D1D1F; --muted: #6E6E73; --line: rgba(0,0,0,.1); }
+    html, body { margin: 0; height: 100%; background: var(--bg); }
 
     #loader {
       position: fixed; inset: 0; z-index: 9999; overflow: hidden;
       display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(180deg, #0B1130 0%, #060911 100%);
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       transition: opacity .5s ease, visibility .5s ease;
     }
     #loader.done { opacity: 0; visibility: hidden; }
 
-    /* Soft glows, same as the app background */
-    #loader::before, #loader::after {
-      content: ""; position: absolute; border-radius: 50%; pointer-events: none;
-    }
-    #loader::before {
-      width: 340px; height: 340px; top: -140px; right: -120px;
-      background: radial-gradient(circle, rgba(45,125,210,.22), transparent 70%);
-    }
-    #loader::after {
-      width: 320px; height: 320px; bottom: 80px; left: -160px;
-      background: radial-gradient(circle, rgba(41,197,246,.16), transparent 70%);
-    }
-
     /* Thin progress bar along the top */
-    .progress { position: absolute; top: 0; left: 0; right: 0; height: 3px; z-index: 3; }
+    .progress { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 3; }
     .progress span {
-      display: block; height: 100%; width: 8%;
-      background: linear-gradient(90deg, #2D7DD2, #29C5F6);
-      box-shadow: 0 0 12px rgba(41,197,246,.8);
-      border-radius: 0 3px 3px 0;
+      display: block; height: 100%; width: 8%; background: #0A84FF;
       transition: width .8s cubic-bezier(.22,1,.36,1);
     }
 
-    /* Centered column: logo, name, status */
     .page {
       position: relative; z-index: 2; width: 100%; max-width: 420px;
       padding: 24px; box-sizing: border-box;
       display: flex; flex-direction: column; align-items: center;
     }
-    /* Logo in a round "water drop" that fills with water as it loads */
-    .drop {
+    /* The logo's glossy white circle (same gradient as tools/make_logo.py) */
+    .badge {
       position: relative; width: 132px; height: 132px; border-radius: 50%;
-      background: rgba(255,255,255,.04);
-      border: 2px solid rgba(41,197,246,.35);
-      box-shadow: 0 0 60px rgba(41,197,246,.25), inset 0 0 30px rgba(41,197,246,.08);
-      overflow: hidden;
+      background: radial-gradient(circle at 36% 24%, #fff 0, #EDEDF0 43%, #B9B9C0 86%);
+      box-shadow: inset 0 1.5px 0 #fff, 0 6px 14px rgba(0,0,0,.45);
       animation: bob 3.2s ease-in-out infinite;
     }
-    /* The water inside the drop. It starts fully below the circle
-       (top: 100% = pushed all the way down, so hidden by overflow: hidden
-       on .drop). flutter_bootstrap.js lowers `top` at each loading step,
-       which raises the water; `transition` makes that rise smooth.
-       It is twice as wide as the circle (200%) so it can keep sliding
-       sideways (the `slide` animation) without its edge ever showing. */
+    :root.light .badge { box-shadow: inset 0 1.5px 0 #fff, 0 0 0 1px rgba(0,0,0,.08), 0 6px 14px rgba(0,0,0,.15); }
+    /* The drop, cut to shape by the #dropShape clip path. Its box is where
+       the drop sits in the logo (38 x 58 of the 96-wide circle). */
+    .drop {
+      position: absolute; left: 30.2%; top: 19.8%; width: 39.6%; height: 60.4%;
+      background: linear-gradient(#3A3A3C, #000);
+      clip-path: url(#dropShape); overflow: hidden;
+    }
+    /* The water. It starts fully below the drop (top: 100%);
+       flutter_bootstrap.js lowers `top` at each step, which raises it.
+       200% wide so it can slide sideways forever without its edge showing. */
     .drop .fill {
-      position: absolute; left: -50%; width: 200%; height: 100%;
+      position: absolute; left: -50%; width: 200%; height: 110%;
       top: 100%;
       transition: top 1.2s cubic-bezier(.22,1,.36,1);
     }
-    .drop .fill svg { position: absolute; top: -14px; width: 100%; height: 16px; }
+    .drop .fill svg { position: absolute; top: -7px; width: 100%; height: 8px; }
     .drop .fill .body { position: absolute; top: 0; bottom: 0; width: 100%;
-      background: linear-gradient(180deg, #29C5F6, #2D7DD2); }
-    .drop .fill.back { opacity: .45; animation: slide 2.6s linear infinite reverse; }
+      background: linear-gradient(#3FA2FF, #0A84FF); }
+    .drop .fill.back { opacity: .5; animation: slide 2.6s linear infinite reverse; }
     .drop .fill.front { animation: slide 1.9s linear infinite; }
-    .drop img {
-      position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px);
-      object-fit: contain; object-position: top; z-index: 2;
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
-    }
-    .drop .fallback {
-      position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 44px;
-    }
-    .brand {
-      margin-top: 22px; font-size: 26px; font-weight: 800; letter-spacing: -.5px; color: #F3F7FB;
-    }
-    .brand .agos { color: #29C5F6; }
-    .brand .dot { color: #FFD21F; }
 
-    /* Bubbles rising from the waves */
+    .brand {
+      margin-top: 24px; font-size: 26px; font-weight: 800; letter-spacing: -.045em; color: var(--text);
+    }
+    .brand .dot { color: #0A84FF; }
+
     .bubble {
       position: absolute; bottom: 90px; border-radius: 50%; z-index: 1;
-      border: 1.5px solid rgba(41,197,246,.5); background: rgba(41,197,246,.08);
+      border: 1.5px solid var(--line);
       animation: rise linear infinite; opacity: 0;
     }
     .status {
-      margin-top: 10px; font-size: 12px; color: #9FB4CC; min-height: 16px;
+      margin-top: 8px; font-size: 12px; color: var(--muted); min-height: 16px;
       display: flex; align-items: center; gap: 8px;
     }
-    .status .dot { width: 7px; height: 7px; border-radius: 50%; background: #29C5F6;
-      box-shadow: 0 0 8px #29C5F6; animation: pulse 1.2s ease-in-out infinite; }
+    .status .dot { width: 6px; height: 6px; border-radius: 50%; background: #0A84FF;
+      animation: pulse 1.2s ease-in-out infinite; }
 
-
-    /* Layered waves at the bottom, like the app's login screen */
+    /* Faint water lines at the bottom */
     .waves { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; z-index: 1; }
     .waves svg { position: absolute; bottom: 0; width: 200%; height: 100%; }
-    .waves .w1 { animation: slide 14s linear infinite; opacity: .3; }
-    .waves .w2 { animation: slide 10s linear infinite reverse; opacity: .4; }
-    .waves .w3 { animation: slide 7s linear infinite; opacity: .55; height: 70%; }
+    .waves path { fill: none; stroke: var(--line); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    .waves .w1 { animation: slide 14s linear infinite; }
+    .waves .w2 { animation: slide 10s linear infinite reverse; }
+    .waves .w3 { animation: slide 7s linear infinite; height: 70%; }
 
     /* The endless-wave trick: each wave picture is 200% wide and its
        second half is an exact copy of its first half. Sliding it left by
@@ -159,11 +147,9 @@
        see the jump. `reverse` on some layers makes them move the other way. */
     @keyframes slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     @keyframes pulse { 50% { opacity: .35; } }
-    @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+    @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
     /* Bubble: starts small and invisible, fades in, floats up 55% of the
-       screen height (55vh) while growing, and fades out at the top. Each
-       bubble below has its own speed (animation-duration) and start time
-       (animation-delay), so they don't all rise together. */
+       screen height (55vh) while growing, and fades out at the top. */
     @keyframes rise {
       0% { transform: translateY(0) scale(.6); opacity: 0; }
       15% { opacity: 1; }
@@ -180,20 +166,28 @@
   <div id="loader" role="status" aria-live="polite" aria-label="Loading AgosAlert">
     <div class="progress"><span id="loaderBar"></span></div>
 
+    <!-- The drop's outline, in 0-1 units of the .drop box (the logo's drop
+         path from tools/make_logo.py, scaled to fit). -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <clipPath id="dropShape" clipPathUnits="objectBoundingBox">
+        <path d="M.5 0 C.342 .19 0 .414 0 .672 A.5 .328 0 0 0 1 .672 C1 .414 .658 .19 .5 0 Z"/>
+      </clipPath>
+    </svg>
+
     <div class="page">
-      <div class="drop">
-        <div class="fill back" id="fillBack">
-          <svg viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M0 8 Q25 0 50 8 T100 8 T150 8 T200 8 V16 H0Z" fill="#29C5F6"/></svg>
-          <div class="body"></div>
+      <div class="badge">
+        <div class="drop">
+          <div class="fill back" id="fillBack">
+            <svg viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M0 8 Q25 0 50 8 T100 8 T150 8 T200 8 V16 H0Z" fill="#3FA2FF"/></svg>
+            <div class="body"></div>
+          </div>
+          <div class="fill front" id="fillFront">
+            <svg viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M0 8 Q25 16 50 8 T100 8 T150 8 T200 8 V16 H0Z" fill="#3FA2FF"/></svg>
+            <div class="body"></div>
+          </div>
         </div>
-        <div class="fill front" id="fillFront">
-          <svg viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M0 8 Q25 16 50 8 T100 8 T150 8 T200 8 V16 H0Z" fill="#29C5F6"/></svg>
-          <div class="body"></div>
-        </div>
-        <img src="assets/assets/images/logo_icon_dark.png" alt="AgosAlert"
-             onerror="this.outerHTML='<div class=&quot;fallback&quot;>≋</div>'">
       </div>
-      <div class="brand"><span class="agos">agos</span>alert<span class="dot">.</span></div>
+      <div class="brand">agosalert<span class="dot">.</span></div>
       <div class="status"><span class="dot"></span><span id="loaderStatus">Checking the waters…</span></div>
     </div>
 
@@ -204,12 +198,11 @@
     <div class="bubble" style="left:88%; width:9px;  height:9px;  animation-duration:6.5s; animation-delay:3.2s"></div>
 
     <div class="waves" aria-hidden="true">
-      <svg class="w1" viewBox="0 0 1440 150" preserveAspectRatio="none"><path fill="#2D7DD2" d="M0 60 C180 20 540 100 720 60 C900 20 1260 100 1440 60 V150 H0Z"/></svg>
-      <svg class="w2" viewBox="0 0 1440 150" preserveAspectRatio="none"><path fill="#29C5F6" d="M0 85 C120 115 240 55 360 85 C480 115 600 55 720 85 C840 115 960 55 1080 85 C1200 115 1320 55 1440 85 V150 H0Z"/></svg>
-      <svg class="w3" viewBox="0 0 1440 150" preserveAspectRatio="none"><path fill="#2D7DD2" d="M0 90 C240 50 480 130 720 90 C960 50 1200 130 1440 90 V150 H0Z"/></svg>
+      <svg class="w1" viewBox="0 0 1440 150" preserveAspectRatio="none"><path d="M0 60 C180 20 540 100 720 60 C900 20 1260 100 1440 60"/></svg>
+      <svg class="w2" viewBox="0 0 1440 150" preserveAspectRatio="none"><path d="M0 85 C120 115 240 55 360 85 C480 115 600 55 720 85 C840 115 960 55 1080 85 C1200 115 1320 55 1440 85"/></svg>
+      <svg class="w3" viewBox="0 0 1440 150" preserveAspectRatio="none"><path d="M0 90 C240 50 480 130 720 90 C960 50 1200 130 1440 90"/></svg>
     </div>
   </div>
-
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 /// ============================================================
 /// THEME — colors, text, and light/dark switching
@@ -6,43 +7,32 @@ import 'package:flutter/material.dart';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
-const String kFontFamily = 'PlusJakartaSans';
+const String kFontFamily = 'Inter';
 
-// Brand palette — shades of blue, like water
-const Color kMidnightBlue = Color(0xFF0B1130); // deepest navy - brand primary
-const Color kDeepBlue = Color(
-  0xFF060911,
-); // near-black navy - dark gradient bottom
-const Color kOceanBlue = Color(0xFF1E4E79);
-const Color kSkyBlue = Color(0xFF2D7DD2); // main accent
-const Color kSkyBlueLight = Color(0xFF4FA8DE);
-const Color kLogoCyan = Color(0xFF29C5F6); // the "agos" blue in the logo
-const Color kLogoYellow = Color(0xFFFFD21F); // the dot in the logo
+// Palette: black and white like iOS, with ONE accent, blue. Color is
+// kept for meaning (blue = interactive, green/amber/red = risk), never for
+// decoration.
+const Color kInk = Color(0xFF1D1D1F); // near-black: light theme text, buttons
+const Color kGraphite = Color(0xFF2C2C2E); // neutral fill under photos
+const Color kGray = Color(0xFF8E8E93); // iOS system gray: neutral icons
+const Color kBlue = Color(0xFF0A84FF); // the accent (iOS system blue)
 
 // Status colors (same in both themes)
 const Color kSafe = Color(0xFF22C55E);
 const Color kCaution = Color(0xFFF59E0B);
 const Color kDanger = Color(0xFFEF4444);
 
-// Dark theme surfaces
-const Color kSurfaceDark = Color(0xFF101828);
-const Color kSurfaceDarkAlt = Color(0xFF16223A);
-const Color kTextPrimaryDark = Color(0xFFF3F7FB);
-const Color kTextSecondaryDark = Color(0xFF9FB4CC);
+// Dark theme: true black, like the iPhone's dark mode.
+const Color kBgDark = Color(0xFF000000);
+const Color kSurfaceDark = Color(0xFF1C1C1E); // sheets, menus (opaque)
+const Color kTextPrimaryDark = Color(0xFFF5F5F7);
+const Color kTextSecondaryDark = Color(0xFF98989F);
 
-// Light theme surfaces
-const Color kBgLightTop = Color(0xFFE6F1FB);
-const Color kBgLightBottom = Color(0xFFF8FBFE);
+// Light theme: iOS "grouped" gray page with white cards.
+const Color kBgLight = Color(0xFFF2F2F7);
 const Color kSurfaceLight = Color(0xFFFFFFFF);
-const Color kSurfaceLightAlt = Color(0xFFEFF6FC);
-const Color kTextPrimaryLight = Color(0xFF0B1130);
-const Color kTextSecondaryLight = Color(0xFF5D7A99);
-
-const LinearGradient kBrandGradient = LinearGradient(
-  colors: [kSkyBlue, kLogoCyan],
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-);
+const Color kTextPrimaryLight = kInk;
+const Color kTextSecondaryLight = Color(0xFF6E6E73);
 
 /// Picks the right color for the current theme, so screens don't have to
 /// check dark/light themselves. Usage in a build method:
@@ -56,17 +46,24 @@ class AppColors {
 
   bool get isDark => Theme.of(context).brightness == Brightness.dark;
 
-  Color get gradientTop => isDark ? kMidnightBlue : kBgLightTop;
-  Color get gradientBottom => isDark ? kDeepBlue : kBgLightBottom;
+  Color get background => isDark ? kBgDark : kBgLight;
   Color get surface => isDark ? kSurfaceDark : kSurfaceLight;
-  Color get surfaceAlt => isDark ? kSurfaceDarkAlt : kSurfaceLightAlt;
+  // Wells inside cards (fields, stat rows). See-through, so they work on
+  // a glass card, a sheet, or the page alike.
+  Color get surfaceAlt => isDark
+      ? Colors.white.withValues(alpha: 0.07)
+      : Colors.black.withValues(alpha: 0.045);
   Color get textPrimary => isDark ? kTextPrimaryDark : kTextPrimaryLight;
   Color get textSecondary => isDark ? kTextSecondaryDark : kTextSecondaryLight;
   Color get border => isDark
-      ? Colors.white.withValues(alpha: 0.08)
-      : const Color(0xFF0B1130).withValues(alpha: 0.07);
-  Color get shadow => Colors.black.withValues(alpha: isDark ? 0.35 : 0.06);
-  Color get accent => kSkyBlue;
+      ? Colors.white.withValues(alpha: 0.09)
+      : Colors.black.withValues(alpha: 0.07);
+  Color get shadow => Colors.black.withValues(alpha: isDark ? 0.4 : 0.06);
+  // Darker blue on white, so small blue text stays readable (4.5:1).
+  Color get accent => isDark ? kBlue : const Color(0xFF0066CC);
+  // Main buttons: white on black, black on white (like deckai / Apple).
+  Color get inverse => isDark ? Colors.white : kInk;
+  Color get onInverse => isDark ? Colors.black : Colors.white;
 }
 
 /// Flood / alert severity, shared by the map, alerts, and flood outlook.
@@ -74,9 +71,9 @@ class AppColors {
 /// so any screen can write `zone.risk.color` instead of repeating
 /// "if high then red, if moderate then orange..." everywhere.
 enum RiskLevel {
-  normal('Normal', kSafe, Icons.check_circle_rounded),
-  moderate('Moderate', kCaution, Icons.error_rounded),
-  high('High', kDanger, Icons.warning_rounded);
+  normal('Normal', kSafe, CupertinoIcons.checkmark_circle_fill),
+  moderate('Moderate', kCaution, CupertinoIcons.exclamationmark_circle_fill),
+  high('High', kDanger, CupertinoIcons.exclamationmark_triangle_fill);
 
   final String label;
   final Color color;
@@ -91,21 +88,26 @@ enum RiskLevel {
 ThemeData _baseTheme(Brightness b) {
   final dark = b == Brightness.dark;
   final scheme = ColorScheme.fromSeed(
-    seedColor: kSkyBlue,
+    seedColor: kBlue,
     brightness: b,
-    primary: kSkyBlue,
+    primary: dark ? kBlue : const Color(0xFF0066CC),
     surface: dark ? kSurfaceDark : kSurfaceLight,
   );
   return ThemeData(
     brightness: b,
     colorScheme: scheme,
-    scaffoldBackgroundColor: dark ? kMidnightBlue : kBgLightTop,
+    scaffoldBackgroundColor: dark ? kBgDark : kBgLight,
     useMaterial3: true,
     fontFamily: kFontFamily,
-    splashFactory: InkSparkle.splashFactory,
+    // iOS has no ripple: a pressed row just dims for a moment. This turns
+    // every InkWell / ListTile / TextButton in the app into that.
+    splashFactory: NoSplash.splashFactory,
+    highlightColor: (dark ? Colors.white : Colors.black).withValues(
+      alpha: dark ? 0.08 : 0.05,
+    ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: dark ? kSurfaceDarkAlt : kMidnightBlue,
+      backgroundColor: dark ? const Color(0xFF2C2C2E) : kInk,
       contentTextStyle: const TextStyle(
         fontFamily: kFontFamily,
         color: Colors.white,

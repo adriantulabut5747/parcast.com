@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../theme.dart';
 import 'responsive.dart';
@@ -154,7 +155,7 @@ class _DeferredViewState extends State<DeferredView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconBadge(Icons.wifi_off_rounded, c.textSecondary, size: 60),
+            IconBadge(CupertinoIcons.wifi_slash, c.textSecondary, size: 60),
             const SizedBox(height: 14),
             Text(
               'Couldn\'t load this page',
@@ -189,37 +190,32 @@ class MapSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Plain background behind the shimmer; only the panel shapes shimmer
-    // (a Shimmer recolors everything inside it, background included).
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: Container(
-          color: AppColors(context).surface,
-          padding: const EdgeInsets.fromLTRB(12, 30, 12, 96),
-          child: const Shimmer(
-            child: Column(
+    // Same shapes as the Map tab: header and round controls at the top,
+    // the glass panel (legend + report cards) at the bottom. Only the
+    // shapes shimmer, not the background.
+    // The Map tab runs under the top bar; its height comes as padding.
+    return Container(
+      color: AppColors(context).surfaceAlt,
+      padding: EdgeInsets.fromLTRB(
+        12,
+        MediaQuery.paddingOf(context).top + 10,
+        12,
+        96,
+      ),
+      child: const Shimmer(
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SkeletonBox(height: 92, radius: 20), // header + filters
-                Spacer(),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Column(
-                    children: [
-                      SkeletonBox(width: 44, height: 44), // zoom in
-                      SizedBox(height: 8),
-                      SkeletonBox(width: 44, height: 44), // zoom out
-                      SizedBox(height: 8),
-                      SkeletonBox(width: 44, height: 44), // recenter
-                    ],
-                  ),
-                ),
-                SizedBox(height: 24),
-                SkeletonBox(height: 56, radius: 20), // legend
+                Expanded(child: SkeletonBox(height: 112, radius: 22)),
+                SizedBox(width: 10),
+                SkeletonBox(width: 48, height: 97, radius: 24),
               ],
             ),
-          ),
+            Spacer(),
+            SkeletonBox(height: 168, radius: 26), // legend + report cards
+          ],
         ),
       ),
     );

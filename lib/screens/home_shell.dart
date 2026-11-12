@@ -1,15 +1,19 @@
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+
 import 'package:flutter/material.dart';
 
 import '../data/demo_data.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/map_glass.dart';
 import '../widgets/responsive.dart';
 import '../services/prefetch.dart';
 import 'account.dart';
 import 'home_tab.dart';
 import 'deferred_screens.dart';
+import '../widgets/agos_icons.dart';
 
 /// Phones only: keeps the phone layout from stretching (wider screens get
 /// the website layout, see _wideLayout).
@@ -82,11 +86,15 @@ class HomeShellState extends State<HomeShell> {
   // selected, label). These are Dart "records", unpacked in _navItem with
   // `final (outline, filled, label) = _items[i];`.
   static const _items = [
-    (Icons.home_outlined, Icons.home_rounded, 'Home'),
-    (Icons.map_outlined, Icons.map_rounded, 'Map'),
-    (Icons.notifications_none_rounded, Icons.notifications_rounded, 'Alerts'),
-    (Icons.support_outlined, Icons.support_rounded, 'Assistance'),
-    (Icons.grid_view_outlined, Icons.grid_view_rounded, 'More'),
+    (CupertinoIcons.house, CupertinoIcons.house_fill, 'Home'),
+    (CupertinoIcons.map, CupertinoIcons.map_fill, 'Map'),
+    (CupertinoIcons.bell, CupertinoIcons.bell_fill, 'Alerts'),
+    (AgosIcons.lifebuoy, AgosIcons.lifebuoyFill, 'Assistance'),
+    (
+      CupertinoIcons.square_grid_2x2,
+      CupertinoIcons.square_grid_2x2_fill,
+      'More',
+    ),
   ];
 
   // All opened tabs are stacked on top of each other, and only the active
@@ -94,13 +102,57 @@ class HomeShellState extends State<HomeShell> {
   // position when you switch away and come back. ValueKey(i) tells Flutter
   // which layer is which tab, so it doesn't mix them up when a newly
   // opened tab gets added to the Stack.
-  Widget _tabStack(int active) {
+  //
+  // [bar] is the top bar's height. Tabs start below it, except the Map:
+  // the map runs under the (glass) bar, edge to edge, and gets the bar's
+  // height as MediaQuery top padding, so its own buttons start below it.
+  Widget _tabStack(int active, double bar) {
+    final mq = MediaQuery.of(context);
     return Stack(
       children: [
         for (var i = 0; i < _tabs.length; i++)
           if (_opened.contains(i))
-            _TabLayer(key: ValueKey(i), active: i == active, child: _tabs[i]),
+            _TabLayer(
+              key: ValueKey(i),
+              active: i == active,
+              child: i == 1
+                  ? MediaQuery(
+                      data: mq.copyWith(
+                        padding: mq.padding.copyWith(top: mq.padding.top + bar),
+                      ),
+                      child: _tabs[i],
+                    )
+                  : Padding(
+                      padding: EdgeInsets.only(top: bar),
+                      child: _tabs[i],
+                    ),
+            ),
       ],
+    );
+  }
+
+  static const _phoneBarHeight = 62.0;
+  static const _webBarHeight = 64.0;
+
+  // The top bar's background. Over the map it's frosted glass (MapGlass
+  // gives it the browser's real blur there, see map_glass.dart).
+  Widget _barGlass(AppColors c, {required bool filled, required Widget child}) {
+    return MapGlass(
+      enabled: _index == 1,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          color: filled
+              ? c.surface.withValues(alpha: c.isDark ? 0.55 : 0.72)
+              : c.surface.withValues(alpha: 0),
+          border: Border(
+            bottom: BorderSide(
+              color: filled ? c.border : c.border.withValues(alpha: 0),
+            ),
+          ),
+        ),
+        child: child,
+      ),
     );
   }
 
@@ -115,16 +167,23 @@ class HomeShellState extends State<HomeShell> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBody: true,
-      body: GradientBackground(
+      body: PageBackground(
         child: SafeArea(
           bottom: false,
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
-              child: Column(
+              child: Stack(
                 children: [
-                  _topBar(c),
-                  Expanded(child: _tabStack(_index)),
+                  Positioned.fill(child: _tabStack(_index, _phoneBarHeight)),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    // Phones: only the Map needs a bar background (other
+                    // tabs scroll below it on the plain page).
+                    child: _barGlass(c, filled: _index == 1, child: _topBar(c)),
+                  ),
                 ],
               ),
             ),
@@ -139,7 +198,13 @@ class HomeShellState extends State<HomeShell> {
             constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: _bottomNav(c),
+              // Over the web map, the nav needs the browser's blur (and
+              // must keep its taps away from the map). See MapGlass.
+              child: MapGlass(
+                radius: 28,
+                enabled: _index == 1,
+                child: _bottomNav(c),
+              ),
             ),
           ),
         ),
@@ -158,13 +223,22 @@ class HomeShellState extends State<HomeShell> {
     final compact = size == ScreenSize.tablet;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: GradientBackground(
+      body: PageBackground(
         child: SafeArea(
           bottom: false,
-          child: Column(
+          child: Stack(
             children: [
-              _webTopBar(c, active, compact),
-              Expanded(child: _tabStack(active)),
+              Positioned.fill(child: _tabStack(active, _webBarHeight)),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _barGlass(
+                  c,
+                  filled: true,
+                  child: _webTopBar(c, active, compact),
+                ),
+              ),
             ],
           ),
         ),
@@ -176,12 +250,8 @@ class HomeShellState extends State<HomeShell> {
   // on the right. On tablets ([compact]) the tabs show icons only.
   Widget _webTopBar(AppColors c, int active, bool compact) {
     return Container(
-      height: 64,
+      height: _webBarHeight,
       padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 28),
-      decoration: BoxDecoration(
-        color: c.surface.withValues(alpha: c.isDark ? 0.5 : 0.85),
-        border: Border(bottom: BorderSide(color: c.border)),
-      ),
       child: Row(
         children: [
           // The two Expanded sides are equally wide, which keeps the nav
@@ -196,7 +266,7 @@ class HomeShellState extends State<HomeShell> {
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
                     onTap: () => switchTab(0),
-                    child: BrandLogo.wordmark(height: compact ? 22 : 26),
+                    child: BrandLogo.wordmark(height: compact ? 30 : 34),
                   ),
                 ),
               ),
@@ -211,7 +281,7 @@ class HomeShellState extends State<HomeShell> {
                   valueListenable: readAlerts,
                   builder: (context, _, _) => _roundButton(
                     c,
-                    icon: Icons.notifications_none_rounded,
+                    icon: CupertinoIcons.bell,
                     tooltip: 'Notifications',
                     badge: unreadAlertCount,
                     onTap: () => switchTab(2),
@@ -221,12 +291,11 @@ class HomeShellState extends State<HomeShell> {
                 _roundButton(
                   c,
                   icon: c.isDark
-                      ? Icons.light_mode_rounded
-                      : Icons.dark_mode_rounded,
+                      ? CupertinoIcons.sun_max_fill
+                      : CupertinoIcons.moon_fill,
                   tooltip: c.isDark
                       ? 'Switch to light mode'
                       : 'Switch to dark mode',
-                  color: c.isDark ? kLogoYellow : kSkyBlue,
                   onTap: () => themeNotifier.value = c.isDark
                       ? ThemeMode.light
                       : ThemeMode.dark,
@@ -251,9 +320,7 @@ class HomeShellState extends State<HomeShell> {
 
   Widget _webNavItem(AppColors c, int i, bool selected, bool compact) {
     final (outline, filled, label) = _items[i];
-    final fg = selected
-        ? (c.isDark ? kSkyBlueLight : kSkyBlue)
-        : c.textSecondary;
+    final fg = selected ? c.accent : c.textSecondary;
     Widget icon = Icon(selected ? filled : outline, color: fg, size: 20);
     // Unread dot on Alerts, like the phone's bottom nav.
     if (i == 2) {
@@ -270,7 +337,7 @@ class HomeShellState extends State<HomeShell> {
     }
     final item = Material(
       color: selected
-          ? kSkyBlue.withValues(alpha: c.isDark ? 0.18 : 0.10)
+          ? c.textPrimary.withValues(alpha: c.isDark ? 0.1 : 0.06)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
@@ -318,23 +385,24 @@ class HomeShellState extends State<HomeShell> {
   // ------------------------------------------------------------
 
   Widget _topBar(AppColors c) {
-    return Padding(
+    return Container(
+      height: _phoneBarHeight,
       padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
       child: Row(
         children: [
           // Wordmark logo; falls back to the old icon + text if it fails.
           BrandLogo.wordmark(
-            height: 28,
+            height: 36,
             fallback: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: const BoxDecoration(
-                    gradient: kBrandGradient,
+                    color: kGraphite,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.waves_rounded,
+                    AgosIcons.waves,
                     color: Colors.white,
                     size: 18,
                   ),
@@ -360,7 +428,7 @@ class HomeShellState extends State<HomeShell> {
             valueListenable: readAlerts,
             builder: (context, _, _) => _roundButton(
               c,
-              icon: Icons.notifications_none_rounded,
+              icon: CupertinoIcons.bell,
               tooltip: 'Alerts',
               badge: unreadAlertCount,
               onTap: () => switchTab(2),
@@ -369,9 +437,10 @@ class HomeShellState extends State<HomeShell> {
           const SizedBox(width: 8),
           _roundButton(
             c,
-            icon: c.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+            icon: c.isDark
+                ? CupertinoIcons.sun_max_fill
+                : CupertinoIcons.moon_fill,
             tooltip: c.isDark ? 'Switch to light mode' : 'Switch to dark mode',
-            color: c.isDark ? kLogoYellow : kSkyBlue,
             // Changing themeNotifier.value makes the ValueListenableBuilder
             // in main.dart rebuild MaterialApp with the other theme.
             onTap: () => themeNotifier.value = c.isDark
@@ -437,7 +506,7 @@ class HomeShellState extends State<HomeShell> {
                   decoration: BoxDecoration(
                     color: kDanger,
                     shape: BoxShape.circle,
-                    border: Border.all(color: c.gradientTop, width: 2),
+                    border: Border.all(color: c.background, width: 2),
                   ),
                   child: Text(
                     '$badge',
@@ -461,65 +530,60 @@ class HomeShellState extends State<HomeShell> {
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          height: 68,
-          decoration: BoxDecoration(
-            color: c.surface.withValues(alpha: c.isDark ? 0.55 : 0.75),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: c.isDark
-                  ? Colors.white.withValues(alpha: 0.12)
-                  : Colors.white,
+        child: CustomPaint(
+          foregroundPainter: GlassEdgePainter(radius: 28, dark: c.isDark),
+          child: Container(
+            height: 68,
+            decoration: BoxDecoration(
+              color: c.surface.withValues(alpha: c.isDark ? 0.55 : 0.75),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: c.shadow,
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: c.shadow,
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          // LayoutBuilder tells us how wide the bar actually is, so we can
-          // work out where each button sits: 5 equal slots, each itemWidth
-          // wide, and tab i starts at x = itemWidth * i.
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final itemWidth = constraints.maxWidth / _items.length;
-              return Stack(
-                children: [
-                  // Sliding highlight behind the selected tab. When _index
-                  // changes, AnimatedPositioned slides it from the old
-                  // `left` to the new one. "+ 8" and "- 16" leave an 8 px
-                  // gap on each side of the pill. easeOutBack = it
-                  // overshoots slightly, then settles.
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 380),
-                    curve: Curves.easeOutBack,
-                    left: itemWidth * _index + 8,
-                    top: 8,
-                    bottom: 8,
-                    width: itemWidth - 16,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            kSkyBlue.withValues(alpha: 0.25),
-                            kLogoCyan.withValues(alpha: 0.18),
-                          ],
+            // LayoutBuilder tells us how wide the bar actually is, so we can
+            // work out where each button sits: 5 equal slots, each itemWidth
+            // wide, and tab i starts at x = itemWidth * i.
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = constraints.maxWidth / _items.length;
+                return Stack(
+                  children: [
+                    // Sliding highlight behind the selected tab. When _index
+                    // changes, AnimatedPositioned slides it from the old
+                    // `left` to the new one. "+ 8" and "- 16" leave an 8 px
+                    // gap on each side of the pill. A snappy spring: it
+                    // overshoots slightly, then settles.
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 450),
+                      curve: kSnappyCurve,
+                      left: itemWidth * _index + 8,
+                      top: 8,
+                      bottom: 8,
+                      width: itemWidth - 16,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: c.textPrimary.withValues(
+                            alpha: c.isDark ? 0.12 : 0.07,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        borderRadius: BorderRadius.circular(20),
                       ),
                     ),
-                  ),
-                  Row(
-                    children: [
-                      for (var i = 0; i < _items.length; i++)
-                        Expanded(child: _navItem(c, i)),
-                    ],
-                  ),
-                ],
-              );
-            },
+                    Row(
+                      children: [
+                        for (var i = 0; i < _items.length; i++)
+                          Expanded(child: _navItem(c, i)),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -536,61 +600,58 @@ class HomeShellState extends State<HomeShell> {
       button: true,
       selected: selected,
       label: label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: PressableScale(
         onTap: () => switchTab(i),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  AnimatedScale(
-                    scale: selected ? 1.12 : 1,
-                    duration: const Duration(milliseconds: 250),
-                    child: Icon(
-                      selected ? filled : outline,
-                      color: color,
-                      size: 23,
-                    ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedScale(
+                  scale: selected ? 1.12 : 1,
+                  duration: const Duration(milliseconds: 650),
+                  curve: kBouncyCurve,
+                  child: Icon(
+                    selected ? filled : outline,
+                    color: color,
+                    size: 23,
                   ),
-                  // Tab 2 (Alerts) gets a small red dot while there are
-                  // unread alerts.
-                  if (i == 2)
-                    ValueListenableBuilder<Set<String>>(
-                      valueListenable: readAlerts,
-                      builder: (context, _, _) => unreadAlertCount == 0
-                          ? const SizedBox.shrink()
-                          : Positioned(
-                              top: -1,
-                              right: -2,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: kDanger,
-                                  shape: BoxShape.circle,
-                                ),
+                ),
+                // Tab 2 (Alerts) gets a small red dot while there are
+                // unread alerts.
+                if (i == 2)
+                  ValueListenableBuilder<Set<String>>(
+                    valueListenable: readAlerts,
+                    builder: (context, _, _) => unreadAlertCount == 0
+                        ? const SizedBox.shrink()
+                        : Positioned(
+                            top: -1,
+                            right: -2,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: kDanger,
+                                shape: BoxShape.circle,
                               ),
                             ),
-                    ),
-                ],
+                          ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontFamily: kFontFamily,
+                color: color,
+                fontSize: 10.5,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w400,
               ),
-              const SizedBox(height: 4),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 200),
-                style: TextStyle(
-                  fontFamily: kFontFamily,
-                  color: color,
-                  fontSize: 10.5,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w400,
-                ),
-                child: Text(label),
-              ),
-            ],
-          ),
+              child: Text(label),
+            ),
+          ],
         ),
       ),
     );
@@ -662,7 +723,7 @@ class _ProfileMenu extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(width: 2),
-                  Icon(Icons.expand_more_rounded, color: c.textSecondary),
+                  Icon(CupertinoIcons.chevron_down, color: c.textSecondary),
                 ],
               ),
             ),
@@ -674,19 +735,19 @@ class _ProfileMenu extends StatelessWidget {
         Divider(height: 17, color: c.border),
         MenuItemButton(
           style: itemStyle,
-          leadingIcon: const Icon(Icons.tune_rounded, size: 20),
+          leadingIcon: const Icon(CupertinoIcons.slider_horizontal_3, size: 20),
           onPressed: () => openSettings(context),
           child: const Text('Settings'),
         ),
         MenuItemButton(
           style: itemStyle,
-          leadingIcon: const Icon(Icons.help_outline_rounded, size: 20),
+          leadingIcon: const Icon(CupertinoIcons.question_circle, size: 20),
           onPressed: () => openHelp(context),
           child: const Text('Help & FAQ'),
         ),
         MenuItemButton(
           style: itemStyle,
-          leadingIcon: const Icon(Icons.info_outline_rounded, size: 20),
+          leadingIcon: const Icon(CupertinoIcons.info_circle, size: 20),
           onPressed: () => openAbout(context),
           child: const Text('About AgosAlert'),
         ),
@@ -694,7 +755,10 @@ class _ProfileMenu extends StatelessWidget {
         if (isGuest)
           MenuItemButton(
             style: itemStyle,
-            leadingIcon: const Icon(Icons.login_rounded, size: 20),
+            leadingIcon: const Icon(
+              CupertinoIcons.person_crop_circle,
+              size: 20,
+            ),
             onPressed: () => logIn(context),
             child: const Text('Log in'),
           )
@@ -704,7 +768,10 @@ class _ProfileMenu extends StatelessWidget {
               foregroundColor: const WidgetStatePropertyAll(kDanger),
               iconColor: const WidgetStatePropertyAll(kDanger),
             ),
-            leadingIcon: const Icon(Icons.logout_rounded, size: 20),
+            leadingIcon: const Icon(
+              CupertinoIcons.square_arrow_right,
+              size: 20,
+            ),
             onPressed: () => confirmLogout(context),
             child: const Text('Log out'),
           ),
@@ -789,7 +856,7 @@ class _ProfileMenu extends StatelessWidget {
                         Row(
                           children: [
                             const Icon(
-                              Icons.thumb_up_rounded,
+                              CupertinoIcons.hand_thumbsup_fill,
                               size: 16,
                               color: kSafe,
                             ),
@@ -804,7 +871,7 @@ class _ProfileMenu extends StatelessWidget {
                             ),
                             const SizedBox(width: 18),
                             const Icon(
-                              Icons.thumb_down_rounded,
+                              CupertinoIcons.hand_thumbsdown_fill,
                               size: 16,
                               color: kDanger,
                             ),
@@ -840,12 +907,13 @@ class _Avatar extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        color: Color(0xFF2566B8),
-        shape: BoxShape.circle,
-      ),
+      decoration: const BoxDecoration(color: kGraphite, shape: BoxShape.circle),
       child: isGuest
-          ? Icon(Icons.person_rounded, color: Colors.white, size: size * 0.6)
+          ? Icon(
+              CupertinoIcons.person_fill,
+              color: Colors.white,
+              size: size * 0.6,
+            )
           : Text(
               kDemoUserInitials,
               style: TextStyle(

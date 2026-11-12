@@ -1,7 +1,11 @@
 import 'dart:math' as math;
+
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 import '../data/demo_data.dart';
 import '../theme.dart';
@@ -11,10 +15,11 @@ import 'responsive.dart';
 /// SHARED WIDGETS — the building blocks every screen uses
 /// ============================================================
 
-/// Full-screen brand gradient with faint water lines across the top.
-class GradientBackground extends StatelessWidget {
+/// The page background: plain black (or iOS light gray) with faint water
+/// lines across the top.
+class PageBackground extends StatelessWidget {
   final Widget child;
-  const GradientBackground({required this.child, super.key});
+  const PageBackground({required this.child, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -24,13 +29,7 @@ class GradientBackground extends StatelessWidget {
     return Container(
       width: double.infinity,
       height: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [c.gradientTop, c.gradientBottom],
-        ),
-      ),
+      color: c.background,
       child: Stack(
         children: [
           Positioned(
@@ -38,7 +37,7 @@ class GradientBackground extends StatelessWidget {
             left: 0,
             right: 0,
             child: WaterLines(
-              color: kSkyBlueLight.withValues(alpha: c.isDark ? 0.10 : 0.18),
+              color: c.textPrimary.withValues(alpha: c.isDark ? 0.07 : 0.06),
               height: 240,
             ),
           ),
@@ -136,7 +135,7 @@ class LocalPhotoView extends StatelessWidget {
           children: [
             // Navy underneath, so the box never flashes white while the
             // photo loads (or if it's missing).
-            const ColoredBox(color: kOceanBlue),
+            const ColoredBox(color: kGraphite),
             Image.asset(
               photo.asset,
               fit: BoxFit.cover,
@@ -276,13 +275,172 @@ class BrandLogo extends StatelessWidget {
   }
 }
 
-/// Frosted-glass card.
+/// The see-through fill of a glass card: a faint white sheen that is a
+/// little brighter at the top, like light falling on glass.
+Gradient glassFill(AppColors c) => LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: c.isDark
+      ? [
+          Colors.white.withValues(alpha: 0.085),
+          Colors.white.withValues(alpha: 0.045),
+        ]
+      : [
+          Colors.white.withValues(alpha: 0.92),
+          Colors.white.withValues(alpha: 0.78),
+        ],
+);
+
+/// Paints the glass edge the way light hits a real curved glass rim
+/// (model from QuickLiquid's specular.ts): one light from the top left.
+/// Each point of the edge gets brighter the more it faces that light
+/// (strongest at the top-left corner), the opposite edge gets a faint
+/// glint (light leaving the glass), and a soft glow sits just inside the
+/// rim (the curved bezel catching light). Use as `foregroundPainter`.
+class GlassEdgePainter extends CustomPainter {
+  final double radius;
+  final bool dark;
+  const GlassEdgePainter({required this.radius, required this.dark});
+
+  // Direction the light comes from (unit vector, screen y points down).
+  static const _light = Offset(-0.5, -0.866);
+
+  // How much an edge whose outward direction is [n] faces the light (lit)
+  // or faces away from it (back). Power 4 keeps the highlight tight.
+  static double _lit(Offset n) =>
+      math.pow(math.max(0, n.dx * _light.dx + n.dy * _light.dy), 4).toDouble();
+  static double _back(Offset n) => math
+      .pow(math.max(0, -(n.dx * _light.dx + n.dy * _light.dy)), 4)
+      .toDouble();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = math.min(radius, size.shortestSide / 2);
+    // 1. Soft glow just inside the rim, kept inside the card.
+    canvas.save();
+    canvas.clipRRect(
+      RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(r)),
+    );
+    _rim(
+      canvas,
+      size,
+      r,
+      inset: 3,
+      width: 6,
+      blur: 3.5,
+      color: (n) {
+        return Colors.white.withValues(alpha: (dark ? 0.14 : 0.5) * _lit(n));
+      },
+    );
+    canvas.restore();
+    // 2. The sharp 1 px edge. Light theme first gets a faint dark line so
+    // white cards still stand out from the gray page.
+    if (!dark) {
+      _rim(
+        canvas,
+        size,
+        r,
+        inset: 0.5,
+        width: 1,
+        color: (n) {
+          return Colors.black.withValues(alpha: 0.05 + 0.05 * _back(n));
+        },
+      );
+    }
+    _rim(
+      canvas,
+      size,
+      r,
+      inset: 0.5,
+      width: 1,
+      color: (n) {
+        return Colors.white.withValues(
+          alpha: dark ? 0.07 + 0.38 * _lit(n) + 0.12 * _back(n) : _lit(n),
+        );
+      },
+    );
+  }
+
+  /// Strokes a rounded rectangle, colouring each point by its outward
+  /// direction. Straight sides face one way, so each is one flat colour;
+  /// corners turn, so a sweep gradient around the corner's center gives
+  /// every point of the arc its exact colour.
+  static void _rim(
+    Canvas canvas,
+    Size size,
+    double radius, {
+    required double inset,
+    required double width,
+    required Color Function(Offset n) color,
+    double blur = 0,
+  }) {
+    Paint paint() => Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width
+      ..maskFilter = blur > 0 ? MaskFilter.blur(BlurStyle.normal, blur) : null;
+    final l = inset, t = inset;
+    final rt = size.width - inset, b = size.height - inset;
+    final rr = math.max(0.0, radius - inset);
+
+    void side(Offset a, Offset z, Offset n) {
+      if ((z - a).distance < 0.01) return;
+      canvas.drawLine(a, z, paint()..color = color(n));
+    }
+
+    void corner(Offset center, double start) {
+      if (rr < 0.01) return;
+      final rect = Rect.fromCircle(center: center, radius: rr);
+      const steps = 6;
+      final colors = [
+        for (var i = 0; i <= steps; i++)
+          color(
+            Offset(
+              math.cos(start + i / steps * math.pi / 2),
+              math.sin(start + i / steps * math.pi / 2),
+            ),
+          ),
+      ];
+      canvas.drawArc(
+        rect,
+        start,
+        math.pi / 2,
+        false,
+        paint()
+          ..shader = SweepGradient(
+            startAngle: start,
+            endAngle: start + math.pi / 2,
+            colors: colors,
+          ).createShader(rect),
+      );
+    }
+
+    side(Offset(l + rr, t), Offset(rt - rr, t), const Offset(0, -1));
+    side(Offset(rt, t + rr), Offset(rt, b - rr), const Offset(1, 0));
+    side(Offset(rt - rr, b), Offset(l + rr, b), const Offset(0, 1));
+    side(Offset(l, b - rr), Offset(l, t + rr), const Offset(-1, 0));
+    corner(Offset(l + rr, t + rr), math.pi);
+    corner(Offset(rt - rr, t + rr), 1.5 * math.pi);
+    corner(Offset(rt - rr, b - rr), 0);
+    corner(Offset(l + rr, b - rr), 0.5 * math.pi);
+  }
+
+  @override
+  bool shouldRepaint(GlassEdgePainter old) =>
+      old.radius != radius || old.dark != dark;
+}
+
+/// Frosted glass that really blurs what's behind it. Costly, so use it only
+/// where something sharp moves underneath (over the map, a photo, or
+/// scrolling content). Everywhere else use [AppCard]: on a plain background
+/// a blur looks exactly the same as no blur.
 class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
+  final double radius;
   const GlassCard({
     required this.child,
     this.padding = const EdgeInsets.all(20),
+    this.radius = 24,
     super.key,
   });
 
@@ -290,33 +448,44 @@ class GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColors(context);
     // BackdropFilter blurs whatever is BEHIND the card (not the card
-    // itself), which gives the frosted-glass look. ClipRRect limits that
-    // blur to the card's rounded shape; without it the blur would spread
-    // over the whole screen.
+    // itself). ClipRRect limits that blur to the card's rounded shape;
+    // without it the blur would spread over the whole screen.
     return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: c.surface.withValues(alpha: c.isDark ? 0.62 : 0.78),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: c.isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : Colors.white.withValues(alpha: 0.9),
-            ),
+        filter: kGlassBlur,
+        child: CustomPaint(
+          foregroundPainter: GlassEdgePainter(radius: radius, dark: c.isDark),
+          child: Container(
+            padding: padding,
+            color: c.surface.withValues(alpha: c.isDark ? 0.62 : 0.72),
+            child: child,
           ),
-          child: child,
         ),
       ),
     );
   }
 }
 
-/// The standard card: surface color, soft border and shadow.
+/// The iPhone's frosted-glass recipe: a strong blur, plus more color
+/// saturation so things behind the glass stay vivid instead of going gray.
+final ImageFilter kGlassBlur = ImageFilter.compose(
+  outer: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+  inner: const ColorFilter.matrix(_saturate18),
+);
+
+// A standard saturation matrix for 1.8x (deckai.app uses saturate(178%)).
+const List<double> _saturate18 = [
+  1.6299, -0.5722, -0.0578, 0, 0, //
+  -0.1701, 1.2278, -0.0578, 0, 0, //
+  -0.1701, -0.5722, 1.7422, 0, 0, //
+  0, 0, 0, 1, 0,
+];
+
+/// The standard card: see-through glass with a lit edge.
 /// Pass [onTap] to make it pressable (it shrinks slightly when pressed).
+/// [borderColor] swaps the glass edge for a plain colored one (e.g. a
+/// risk color); [color] or [gradient] replace the glass fill.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
@@ -339,21 +508,21 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColors(context);
-    final card = Container(
+    Widget card = Container(
       decoration: BoxDecoration(
-        color: gradient == null ? (color ?? c.surface) : null,
-        gradient: gradient,
+        color: color,
+        gradient: color == null ? (gradient ?? glassFill(c)) : null,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? c.border),
-        // Dark theme: the border alone separates cards (shadows barely
-        // show on navy and just muddy it). Light theme: a soft shadow.
+        border: borderColor == null ? null : Border.all(color: borderColor!),
+        // Dark theme: the lit edge alone separates cards (shadows don't
+        // show on black). Light theme: a soft, wide shadow.
         boxShadow: c.isDark
             ? null
             : [
                 BoxShadow(
                   color: c.shadow,
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
                 ),
               ],
       ),
@@ -366,12 +535,45 @@ class AppCard extends StatelessWidget {
         child: Padding(padding: padding, child: child),
       ),
     );
+    if (borderColor == null) {
+      card = CustomPaint(
+        foregroundPainter: GlassEdgePainter(radius: radius, dark: c.isDark),
+        child: card,
+      );
+    }
     if (onTap == null) return card;
     return PressableScale(onTap: onTap, child: card);
   }
 }
 
-/// Shrinks its child a little while pressed — makes taps feel physical.
+/// Apple-style springs (stiffness/damping from QuickLiquid's spring.ts;
+/// Flutter's SpringDescription uses the same units). Snappy = tab
+/// switches, bouncy = release after a press, stiff = the press itself.
+const kSpringSnappy = SpringDescription(mass: 1, stiffness: 400, damping: 30);
+const kSpringBouncy = SpringDescription(mass: 1, stiffness: 250, damping: 15);
+const kSpringStiff = SpringDescription(mass: 1, stiffness: 600, damping: 35);
+
+/// A spring as a [Curve], for widgets that take a curve + duration
+/// (AnimatedPositioned, TweenAnimationBuilder...). [seconds] must be long
+/// enough for the spring to settle, or it jumps to the end.
+class SpringCurve extends Curve {
+  final double seconds;
+  final SpringSimulation _sim;
+  SpringCurve(SpringDescription spring, this.seconds)
+    : _sim = SpringSimulation(spring, 0, 1, 0);
+
+  @override
+  double transformInternal(double t) => _sim.x(t * seconds);
+}
+
+/// Spring curves for 450 ms (snappy) and 650 ms (bouncy) animations.
+final kSnappyCurve = SpringCurve(kSpringSnappy, 0.45);
+final kBouncyCurve = SpringCurve(kSpringBouncy, 0.65);
+
+/// The liquid press: while held, the child sinks in and squishes a little
+/// wider and shorter (like pressing a water drop); on release it springs
+/// back with a small bounce. Small buttons sink to 95%, wide cards only
+/// ~98%, so every size moves about the same few pixels.
 class PressableScale extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -387,36 +589,64 @@ class PressableScale extends StatefulWidget {
   State<PressableScale> createState() => _PressableScaleState();
 }
 
-class _PressableScaleState extends State<PressableScale> {
-  // True while a finger (or mouse button) is held down on the widget.
-  bool _down = false;
+class _PressableScaleState extends State<PressableScale>
+    with TickerProviderStateMixin {
+  // Width and height scale, each driven by a spring. `unbounded` because a
+  // spring overshoots past 1.0 for a moment on release.
+  late final _sx = AnimationController.unbounded(vsync: this, value: 1);
+  late final _sy = AnimationController.unbounded(vsync: this, value: 1);
+
+  @override
+  void dispose() {
+    _sx.dispose();
+    _sy.dispose();
+    super.dispose();
+  }
+
+  void _springTo(double x, double y, SpringDescription spring) {
+    // Reduced motion (phone setting): no squish, no bounce.
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    // Starting from the current speed keeps it smooth if a press
+    // interrupts a bounce that's still going.
+    _sx.animateWith(SpringSimulation(spring, _sx.value, x, _sx.velocity));
+    _sy.animateWith(SpringSimulation(spring, _sy.value, y, _sy.velocity));
+  }
+
+  void _press() {
+    if (widget.onTap == null && widget.onLongPress == null) return;
+    // Sink ~10 px total, clamped to QuickLiquid's 0.95 for small buttons.
+    final w = context.size?.width ?? 100;
+    final s = (1 - 10 / w).clamp(0.95, 0.985);
+    final squish = (1 - s) * 0.4;
+    _springTo(s + squish, s - squish, kSpringStiff);
+  }
+
+  void _release() => _springTo(1, 1, kSpringBouncy);
 
   @override
   Widget build(BuildContext context) {
-    // MouseRegion: shows the hand cursor on desktop browsers, but only when
-    // there's actually something to tap.
-    // GestureDetector: onTapDown sets _down = true (shrink), onTapUp and
-    // onTapCancel (finger slid away) set it back to false (grow back).
-    // setState() tells Flutter to rebuild, and AnimatedScale smoothly
-    // animates between 97% and 100% size over 120 ms.
-    // HitTestBehavior.opaque: taps on empty/transparent spots inside the
-    // child still count, not just taps on painted pixels.
+    // MouseRegion: hand cursor on desktop, only when there's something to
+    // tap. HitTestBehavior.opaque: taps on transparent spots still count.
+    // onTapCancel = the finger slid away, so it springs back too.
     return MouseRegion(
       cursor: widget.onTap != null
           ? SystemMouseCursors.click
           : MouseCursor.defer,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _down = true),
-        onTapUp: (_) => setState(() => _down = false),
-        onTapCancel: () => setState(() => _down = false),
+        onTapDown: (_) => _press(),
+        onTapUp: (_) => _release(),
+        onTapCancel: _release,
         onTap: widget.onTap,
         onLongPress: widget.onLongPress,
-        child: AnimatedScale(
-          scale: _down ? 0.97 : 1,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_sx, _sy]),
           child: widget.child,
+          builder: (context, child) => Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.diagonal3Values(_sx.value, _sy.value, 1),
+            child: child,
+          ),
         ),
       ),
     );
@@ -496,24 +726,28 @@ class _FadeSlideInState extends State<FadeSlideIn>
   }
 }
 
-/// Big full-width brand-gradient button.
-class GradientButton extends StatelessWidget {
+/// Big full-width pill button: white on black in the dark theme, black on
+/// white in the light one. [color] is only for actions that are
+/// dangerous or urgent (kDanger), with white text.
+class PrimaryButton extends StatelessWidget {
   final String label;
   final IconData? icon;
   final VoidCallback? onPressed;
   final bool loading;
-  final Gradient gradient;
-  const GradientButton({
+  final Color? color;
+  const PrimaryButton({
     required this.label,
     this.icon,
     this.onPressed,
     this.loading = false,
-    this.gradient = kBrandGradient,
+    this.color,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors(context);
+    final fg = color == null ? c.onInverse : Colors.white;
     // While `loading` is true, onTap is null so the button can't be tapped
     // twice (e.g. submitting a report twice), and a spinner replaces the
     // label. If onPressed itself is null, the button is shown half-faded
@@ -525,35 +759,33 @@ class GradientButton extends StatelessWidget {
         opacity: onPressed == null ? 0.5 : 1,
         child: Container(
           width: double.infinity,
-          height: 54,
+          height: 52,
           decoration: BoxDecoration(
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(16),
+            color: color ?? c.inverse,
+            borderRadius: BorderRadius.circular(26),
           ),
           alignment: Alignment.center,
           child: loading
-              ? const SizedBox(
+              ? SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    color: Colors.white,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: fg),
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                      style: TextStyle(
+                        color: fg,
+                        fontWeight: FontWeight.w600,
                         fontSize: 15,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     if (icon != null) ...[
                       const SizedBox(width: 8),
-                      Icon(icon, color: Colors.white, size: 18),
+                      Icon(icon, color: fg, size: 18),
                     ],
                   ],
                 ),
@@ -677,7 +909,7 @@ class SectionHeader extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  Icon(Icons.chevron_right_rounded, color: c.accent, size: 18),
+                  Icon(CupertinoIcons.chevron_right, color: c.accent, size: 18),
                 ],
               ),
             ),
@@ -784,9 +1016,9 @@ class AnimatedWaves extends StatefulWidget {
   const AnimatedWaves({
     this.height = 80,
     this.colors = const [
-      Color(0x332D7DD2),
-      Color(0x4429C5F6),
-      Color(0x552D7DD2),
+      Color(0x1A0A84FF),
+      Color(0x260A84FF),
+      Color(0x330A84FF),
     ],
     super.key,
   });
@@ -938,7 +1170,7 @@ class SubpageScaffold extends StatelessWidget {
     final c = AppColors(context);
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: GradientBackground(
+      body: PageBackground(
         child: SafeArea(
           // On wide screens, keep forms and text at a readable width in
           // the middle instead of stretching across the whole window.
@@ -964,7 +1196,7 @@ class SubpageScaffold extends StatelessWidget {
             children: [
               IconButton(
                 tooltip: 'Back',
-                icon: Icon(Icons.arrow_back_rounded, color: c.textPrimary),
+                icon: Icon(CupertinoIcons.chevron_back, color: c.textPrimary),
                 onPressed: () => Navigator.of(context).pop(),
               ),
               const SizedBox(width: 4),
@@ -1053,40 +1285,47 @@ Future<T?> showAppSheet<T>(
         ),
         // The sheet can be at most 88% of the screen height; anything
         // taller scrolls (SingleChildScrollView below).
+        // Frosted glass: the page shows through, blurred, like iOS sheets.
         child: _SwipeDownToClose(
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(sheetContext).size.height * 0.88,
-            ),
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-              border: Border.all(color: c.border),
-            ),
-            child: SingleChildScrollView(
-              // Clamping (no bounce) on every phone, so pulling down at the
-              // top reaches _SwipeDownToClose instead of stretching the list.
-              physics: const ClampingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 18),
-                      decoration: BoxDecoration(
-                        color: c.textSecondary.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            child: BackdropFilter(
+              filter: kGlassBlur,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(sheetContext).size.height * 0.88,
+                ),
+                decoration: BoxDecoration(
+                  color: c.surface.withValues(alpha: c.isDark ? 0.78 : 0.86),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
                   ),
-                  builder(sheetContext),
-                ],
+                  border: Border.all(color: c.border),
+                ),
+                child: SingleChildScrollView(
+                  // Clamping (no bounce) on every phone, so pulling down at the
+                  // top reaches _SwipeDownToClose instead of stretching the list.
+                  physics: const ClampingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 18),
+                          decoration: BoxDecoration(
+                            color: c.textSecondary.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                      builder(sheetContext),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -1121,35 +1360,46 @@ Future<T?> _showAppDialog<T>(
                 maxWidth: maxWidth,
                 maxHeight: height * 0.9,
               ),
-              child: Material(
-                color: c.surface,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: IconButton(
-                          tooltip: 'Close',
-                          icon: Icon(
-                            Icons.close_rounded,
-                            color: c.textSecondary,
+                child: BackdropFilter(
+                  filter: kGlassBlur,
+                  child: CustomPaint(
+                    foregroundPainter: GlassEdgePainter(
+                      radius: 24,
+                      dark: c.isDark,
+                    ),
+                    child: Material(
+                      color: c.surface.withValues(alpha: c.isDark ? 0.8 : 0.88),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: IconButton(
+                                tooltip: 'Close',
+                                icon: Icon(
+                                  CupertinoIcons.xmark,
+                                  color: c.textSecondary,
+                                ),
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(),
+                              ),
+                            ),
                           ),
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                        ),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                              child: builder(dialogContext),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Flexible(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
-                        child: builder(dialogContext),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1195,32 +1445,23 @@ Future<void> showSuccessDialog(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // The green check "pops" in: its scale animates 0 -> 1,
-                  // and Curves.elasticOut makes it overshoot a little and
-                  // bounce back, like a spring.
+                  // The green check "pops" in: its scale springs 0 -> 1,
+                  // overshooting a little and bouncing back.
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 700),
-                    curve: Curves.elasticOut,
+                    duration: const Duration(milliseconds: 650),
+                    curve: kBouncyCurve,
                     builder: (context, v, child) =>
                         Transform.scale(scale: v, child: child),
                     child: Container(
                       width: 76,
                       height: 76,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [kSafe, Color(0xFF4ADE80)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: kSafe.withValues(alpha: 0.45),
-                            blurRadius: 24,
-                          ),
-                        ],
+                        color: kSafe,
                       ),
                       child: const Icon(
-                        Icons.check_rounded,
+                        CupertinoIcons.checkmark_alt,
                         color: Colors.white,
                         size: 42,
                       ),
@@ -1247,7 +1488,7 @@ Future<void> showSuccessDialog(
                     ),
                   ),
                   const SizedBox(height: 20),
-                  GradientButton(
+                  PrimaryButton(
                     label: 'Done',
                     onPressed: () => Navigator.of(dialogContext).pop(),
                   ),
@@ -1259,14 +1500,14 @@ Future<void> showSuccessDialog(
       );
     },
     // How the whole dialog appears: fades in while growing from 90% to
-    // 100% size (easeOutBack = slight overshoot at the end).
+    // 100% size on a snappy spring (slight overshoot at the end).
     transitionBuilder: (_, anim, _, child) => FadeTransition(
       opacity: anim,
       child: ScaleTransition(
         scale: Tween(
           begin: 0.9,
           end: 1.0,
-        ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutBack)),
+        ).animate(CurvedAnimation(parent: anim, curve: kSnappyCurve)),
         child: child,
       ),
     ),
@@ -1351,7 +1592,12 @@ class SelectChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColors(context);
-    final tint = color ?? c.accent;
+    // Picked = solid white (black in light mode), like an iOS segmented
+    // control. A chip with its own [color] (a risk level) keeps that color.
+    final tint = color ?? c.inverse;
+    final fg = selected
+        ? (color == null ? c.onInverse : Colors.white)
+        : c.textSecondary;
     return PressableScale(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1359,28 +1605,15 @@ class SelectChip extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? tint : c.surface,
+          color: selected ? tint : c.surfaceAlt,
           borderRadius: BorderRadius.circular(40),
           border: Border.all(color: selected ? tint : c.border),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: tint.withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : [],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(
-                icon,
-                size: 16,
-                color: selected ? Colors.white : c.textSecondary,
-              ),
+              Icon(icon, size: 16, color: fg),
               const SizedBox(width: 6),
             ],
             Flexible(
@@ -1390,9 +1623,9 @@ class SelectChip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: selected ? Colors.white : c.textSecondary,
+                  color: fg,
                   fontSize: 12.5,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
               ),
             ),
@@ -1539,7 +1772,7 @@ class BarangayDropdown extends StatelessWidget {
           dropdownColor: c.surface,
           borderRadius: BorderRadius.circular(16),
           menuMaxHeight: 320,
-          icon: Icon(Icons.expand_more_rounded, color: c.textSecondary),
+          icon: Icon(CupertinoIcons.chevron_down, color: c.textSecondary),
           style: TextStyle(
             color: c.textPrimary,
             fontFamily: kFontFamily,

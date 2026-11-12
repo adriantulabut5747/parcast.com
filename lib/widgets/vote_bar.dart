@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
 import '../screens/account.dart';
@@ -48,7 +49,7 @@ class VoteBar extends StatelessWidget {
               ),
             _button(
               c,
-              Icons.thumb_up_rounded,
+              CupertinoIcons.hand_thumbsup_fill,
               'Helpful',
               zone.upVotes + (mine == Vote.up ? 1 : 0),
               kSafe,
@@ -58,7 +59,7 @@ class VoteBar extends StatelessWidget {
             const SizedBox(width: 8),
             _button(
               c,
-              Icons.thumb_down_rounded,
+              CupertinoIcons.hand_thumbsdown_fill,
               'Not helpful',
               zone.downVotes + (mine == Vote.down ? 1 : 0),
               kDanger,

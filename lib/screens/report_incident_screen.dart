@@ -1,14 +1,16 @@
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../data/demo_data.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/flood_depth.dart';
-import '../widgets/map_tiles.dart';
+import '../widgets/agos_map.dart';
+import '../widgets/agos_icons.dart';
 
 /// ============================================================
 /// REPORT INCIDENT — type, severity, photo, location, notes
@@ -23,12 +25,12 @@ class ReportIncidentScreen extends StatefulWidget {
 
 class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
   static const _types = [
-    (Icons.flood_rounded, 'Flooding'),
-    (Icons.block_rounded, 'Blocked road'),
-    (Icons.landslide_rounded, 'Landslide'),
-    (Icons.electrical_services_rounded, 'Fallen power line'),
-    (Icons.groups_rounded, 'Stranded people'),
-    (Icons.more_horiz_rounded, 'Other'),
+    (AgosIcons.flood, 'Flooding'),
+    (CupertinoIcons.nosign, 'Blocked road'),
+    (AgosIcons.landslide, 'Landslide'),
+    (CupertinoIcons.bolt_fill, 'Fallen power line'),
+    (CupertinoIcons.person_3_fill, 'Stranded people'),
+    (CupertinoIcons.ellipsis, 'Other'),
   ];
 
   // Types where water depth matters. The depth card is hidden for the rest.
@@ -40,7 +42,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
   String _barangay = 'Poblacion';
   Uint8List? _photo;
   bool _submitting = false;
-  final _map = MapController();
+  final _map = AgosMapController();
 
   bool get _asksDepth => _waterTypes.contains(_type);
 
@@ -160,7 +162,10 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
                 value: _barangay,
                 onChanged: (v) {
                   setState(() => _barangay = v);
-                  _map.move(kBarangayPoints[v] ?? kMabalacatCenter, 14.5);
+                  _map.flyTo(
+                    kBarangayPoints[v] ?? kMabalacatCenter,
+                    zoom: 14.5,
+                  );
                 },
               ),
               const SizedBox(height: 10),
@@ -168,32 +173,22 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
                 borderRadius: BorderRadius.circular(18),
                 child: SizedBox(
                   height: 150,
-                  child: FlutterMap(
-                    mapController: _map,
-                    options: MapOptions(
-                      initialCenter: point,
-                      initialZoom: 14.5,
-                      backgroundColor: c.surfaceAlt,
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.none,
-                      ),
-                    ),
-                    children: [
-                      const AppTileLayer(),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: point,
-                            width: 40,
-                            height: 40,
-                            alignment: Alignment.topCenter,
-                            child: Icon(
-                              Icons.location_on_rounded,
-                              color: _severity.color,
-                              size: 40,
-                            ),
-                          ),
-                        ],
+                  // A still preview (no dragging): shows where the
+                  // report will be pinned, in the color of its severity.
+                  child: AgosMap(
+                    controller: _map,
+                    center: point,
+                    zoom: 14.5,
+                    interactive: false,
+                    pins: [
+                      MapPin(
+                        id: 'report',
+                        kind: PinKind.flood,
+                        point: point,
+                        color: _severity.color,
+                        icon: AgosIcons.flood,
+                        title: _barangay,
+                        a11y: 'Report location, Brgy. $_barangay',
                       ),
                     ],
                   ),
@@ -206,9 +201,9 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
                 maxLines: 3,
               ),
               const SizedBox(height: 26),
-              GradientButton(
+              PrimaryButton(
                 label: _type == null ? 'Choose what happened' : 'Submit report',
-                icon: Icons.send_rounded,
+                icon: CupertinoIcons.paperplane_fill,
                 loading: _submitting,
                 onPressed: _type == null ? null : _submit,
               ),
@@ -351,7 +346,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.close_rounded,
+                    CupertinoIcons.xmark,
                     color: Colors.white,
                     size: 18,
                   ),
@@ -394,11 +389,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
         height: 88,
         child: Row(
           children: [
-            option(
-              Icons.photo_camera_outlined,
-              'Take photo',
-              ImageSource.camera,
-            ),
+            option(CupertinoIcons.camera, 'Take photo', ImageSource.camera),
             VerticalDivider(
               width: 1,
               color: c.border,
@@ -406,7 +397,7 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen> {
               endIndent: 16,
             ),
             option(
-              Icons.photo_library_outlined,
+              CupertinoIcons.photo_on_rectangle,
               'Choose from gallery',
               ImageSource.gallery,
             ),

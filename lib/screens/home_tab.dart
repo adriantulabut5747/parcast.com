@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
 import '../services/weather.dart';
@@ -12,6 +13,7 @@ import '../widgets/skeleton.dart';
 import 'evacuation_centers_screen.dart';
 import 'home_shell.dart';
 import 'deferred_screens.dart';
+import '../widgets/agos_icons.dart';
 
 /// ============================================================
 /// HOME TAB — live Mabalacat weather, flood outlook, forecast,
@@ -198,7 +200,7 @@ class _HomeTabState extends State<HomeTab> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.location_on_rounded,
+                        CupertinoIcons.placemark_fill,
                         size: 15,
                         color: Colors.white,
                       ),
@@ -264,7 +266,7 @@ class _HomeTabState extends State<HomeTab> {
       padding: const EdgeInsets.all(20),
       child: Row(
         children: [
-          IconBadge(Icons.cloud_off_rounded, c.textSecondary, size: 46),
+          IconBadge(CupertinoIcons.wifi_slash, c.textSecondary, size: 46),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -295,27 +297,27 @@ class _HomeTabState extends State<HomeTab> {
   Widget _quickActions(BuildContext context, AppColors c, bool wide) {
     final actions = [
       (
-        Icons.map_rounded,
+        CupertinoIcons.map_fill,
         'Flood\nMap',
-        kSkyBlue,
+        c.textPrimary,
         () => HomeShell.of(context)?.switchTab(1),
       ),
       (
-        Icons.campaign_rounded,
+        CupertinoIcons.exclamationmark_bubble_fill,
         'Report\nIncident',
-        const Color(0xFFF97316),
+        c.textPrimary,
         () => openReportIncident(context),
       ),
       (
-        Icons.night_shelter_rounded,
+        CupertinoIcons.house_alt_fill,
         'Evacuation\nCenters',
-        kSafe,
+        c.textPrimary,
         () =>
             Navigator.of(context)
                 .push(slideRoute(const EvacuationCentersScreen())),
       ),
       (
-        Icons.phone_in_talk_rounded,
+        CupertinoIcons.phone_fill,
         'Emergency\nHotlines',
         kDanger,
         () => HomeShell.of(context)?.switchTab(3),
@@ -331,7 +333,7 @@ class _HomeTabState extends State<HomeTab> {
         width: wide ? 40 : 56,
         height: wide ? 40 : 56,
         decoration: BoxDecoration(
-          color: color.withValues(alpha: c.isDark ? 0.16 : 0.12),
+          color: color.withValues(alpha: c.isDark ? 0.10 : 0.06),
           borderRadius: BorderRadius.circular(wide ? 12 : 18),
         ),
         child: Icon(icon, color: color, size: wide ? 21 : 26),
@@ -477,145 +479,151 @@ class _WeatherSection extends StatelessWidget {
     final (label, icon) = weatherInfo(w.weatherCode, isDay: w.isDay);
     final colors = weatherGradient(w.weatherCode, w.isDay);
     const white70 = Color(0xB3FFFFFF);
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return CustomPaint(
+      foregroundPainter: const GlassEdgePainter(radius: 28, dark: true),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: LinearGradient(
+            colors: colors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
         ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Stack(
-          children: [
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: AnimatedWaves(
-                height: 70,
-                colors: [
-                  Color(0x14FFFFFF),
-                  Color(0x1AFFFFFF),
-                  Color(0x22FFFFFF),
-                ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Stack(
+            children: [
+              const Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AnimatedWaves(
+                  height: 70,
+                  colors: [
+                    Color(0x14FFFFFF),
+                    Color(0x1AFFFFFF),
+                    Color(0x22FFFFFF),
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const LiveDot(color: Color(0xFF7CFFB2)),
-                      const SizedBox(width: 6),
-                      const Text(
-                        'LIVE WEATHER · MABALACAT CITY',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.5,
-                          letterSpacing: 0.8,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        formatTime(w.time),
-                        style: const TextStyle(color: white70, fontSize: 11.5),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // The big temperature counts up from 0 to the
-                            // real value over 1.1 s. v is the in-between
-                            // number on each frame, rounded for display.
-                            TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 0, end: w.temperature),
-                              duration: const Duration(milliseconds: 1100),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, v, _) => Text(
-                                '${v.round()}°',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 72,
-                                  height: 1,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -3,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              label,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'H ${w.today.max.round()}°  ·  L ${w.today.min.round()}°  ·  Feels ${w.feelsLike.round()}°',
-                              style: const TextStyle(
-                                color: white70,
-                                fontSize: 12.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(icon, color: Colors.white, size: 64),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.15),
-                      ),
-                    ),
-                    child: Row(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        _heroStat(
-                          Icons.umbrella_rounded,
-                          '${w.today.rainChance}%',
-                          'Rain chance',
+                        const LiveDot(color: Color(0xFF7CFFB2)),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'LIVE WEATHER · MABALACAT CITY',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10.5,
+                            letterSpacing: 0.8,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                        _heroStat(
-                          Icons.water_drop_rounded,
-                          '${w.today.rainSum.toStringAsFixed(1)} mm',
-                          'Rain today',
-                        ),
-                        _heroStat(
-                          Icons.opacity_rounded,
-                          '${w.humidity}%',
-                          'Humidity',
-                        ),
-                        _heroStat(
-                          Icons.air_rounded,
-                          '${w.windSpeed.round()} km/h',
-                          'Wind',
+                        const Spacer(),
+                        Text(
+                          formatTime(w.time),
+                          style: const TextStyle(
+                            color: white70,
+                            fontSize: 11.5,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // The big temperature counts up from 0 to the
+                              // real value over 1.1 s. v is the in-between
+                              // number on each frame, rounded for display.
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0, end: w.temperature),
+                                duration: const Duration(milliseconds: 1100),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, v, _) => Text(
+                                  '${v.round()}°',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 72,
+                                    height: 1,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -3,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                label,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'H ${w.today.max.round()}°  ·  L ${w.today.min.round()}°  ·  Feels ${w.feelsLike.round()}°',
+                                style: const TextStyle(
+                                  color: white70,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(icon, color: Colors.white, size: 64),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.15),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          _heroStat(
+                            CupertinoIcons.umbrella_fill,
+                            '${w.today.rainChance}%',
+                            'Rain chance',
+                          ),
+                          _heroStat(
+                            CupertinoIcons.drop_fill,
+                            '${w.today.rainSum.toStringAsFixed(1)} mm',
+                            'Rain today',
+                          ),
+                          _heroStat(
+                            CupertinoIcons.drop,
+                            '${w.humidity}%',
+                            'Humidity',
+                          ),
+                          _heroStat(
+                            CupertinoIcons.wind,
+                            '${w.windSpeed.round()} km/h',
+                            'Wind',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -656,7 +664,7 @@ class _WeatherSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              IconBadge(Icons.flood_rounded, color, size: 44, squircle: true),
+              IconBadge(AgosIcons.flood, color, size: 44, squircle: true),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -742,7 +750,7 @@ class _WeatherSection extends StatelessWidget {
           Row(
             children: [
               Icon(
-                Icons.info_outline_rounded,
+                CupertinoIcons.info_circle,
                 size: 13,
                 color: c.textSecondary,
               ),
@@ -858,7 +866,7 @@ class _ForecastCardState extends State<_ForecastCard> {
 
   Widget _hourly(AppColors c) {
     final hours = widget.weather.hourly;
-    final rainy = c.isDark ? kSkyBlueLight : kSkyBlue;
+    final rainy = c.accent;
     Widget hour(int i) {
       final h = hours[i];
       final now = i == 0;
@@ -931,7 +939,7 @@ class _ForecastCardState extends State<_ForecastCard> {
 
   Widget _daily(AppColors c) {
     final days = widget.weather.daily;
-    final rainy = c.isDark ? kSkyBlueLight : kSkyBlue;
+    final rainy = c.accent;
     return Column(
       key: const ValueKey('days'),
       children: [
@@ -1222,7 +1230,7 @@ class _ReportFeedState extends State<_ReportFeed> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const ColoredBox(color: kOceanBlue),
+                const ColoredBox(color: kGraphite),
                 Image.asset(
                   z.photo,
                   fit: BoxFit.cover,
@@ -1321,14 +1329,14 @@ class _ReportFeedState extends State<_ReportFeed> {
                         HomeShell.of(context)?.switchTab(1);
                         focusedZone.value = z;
                       },
-                      icon: const Icon(Icons.map_outlined, size: 18),
+                      icon: const Icon(CupertinoIcons.map, size: 18),
                       label: const Text(
                         'View on map',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       style: TextButton.styleFrom(
-                        foregroundColor: c.isDark ? kSkyBlueLight : kSkyBlue,
+                        foregroundColor: c.accent,
                         textStyle: const TextStyle(
                           fontFamily: kFontFamily,
                           fontSize: 13,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,6 +13,9 @@ import 'package:agosalert/screens/more_tab.dart';
 import 'package:agosalert/screens/report_incident_screen.dart';
 import 'package:agosalert/screens/settings_screen.dart';
 import 'package:agosalert/theme.dart';
+import 'package:agosalert/widgets/agos_icons.dart';
+import 'package:agosalert/widgets/agos_map.dart';
+import 'package:agosalert/widgets/common.dart';
 import 'package:agosalert/widgets/flood_depth.dart';
 import 'package:agosalert/widgets/skeleton.dart';
 
@@ -40,7 +44,6 @@ void main() {
     expect(find.byType(HomeShell), findsOneWidget);
     expect(find.text('Quick actions'), findsOneWidget);
   });
-
 
   // Each tab and screen should build on a phone without layout errors
   // (a "RenderFlex overflowed" error makes the test fail).
@@ -140,16 +143,26 @@ void main() {
       final view = MapCamera.of(tester.element(find.byType(TileLayer).first))
           .visibleBounds;
       const margin = 0.001; // rounding
-      expect(view.north, lessThanOrEqualTo(kMabalacatBounds.north + margin));
-      expect(view.south, greaterThanOrEqualTo(kMabalacatBounds.south - margin));
-      expect(view.west, greaterThanOrEqualTo(kMabalacatBounds.west - margin));
-      expect(view.east, lessThanOrEqualTo(kMabalacatBounds.east + margin));
+      expect(view.north, lessThanOrEqualTo(kCityLatLngBounds.north + margin));
+      expect(
+        view.south,
+        greaterThanOrEqualTo(kCityLatLngBounds.south - margin),
+      );
+      expect(view.west, greaterThanOrEqualTo(kCityLatLngBounds.west - margin));
+      expect(view.east, lessThanOrEqualTo(kCityLatLngBounds.east + margin));
     }
   });
 
   testWidgets('Tapping a flood pin shows its depth', (tester) async {
     await pumpPhone(tester, const Scaffold(body: MapTab()));
-    await tester.tap(find.text('40 cm'));
+    // Pins are keyed by their id ('zone-' + barangay); the text '40 cm' is
+    // on both the pin and its card in the bottom panel.
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('pin-zone-Tabun')),
+        matching: find.byIcon(AgosIcons.flood),
+      ),
+    );
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Brgy. Tabun'), findsOneWidget);
     expect(find.text('Knee-deep'), findsOneWidget);
@@ -178,14 +191,14 @@ void main() {
     isGuest = false;
     myVotes.value = {};
     await openDau(tester);
-    await tapThumb(tester, Icons.thumb_up_rounded);
+    await tapThumb(tester, CupertinoIcons.hand_thumbsup_fill);
     expect(find.text('43'), findsOneWidget);
     // Switching moves the vote: up goes back to 42, down goes to 4.
-    await tapThumb(tester, Icons.thumb_down_rounded);
+    await tapThumb(tester, CupertinoIcons.hand_thumbsdown_fill);
     expect(find.text('42'), findsOneWidget);
     expect(find.text('4'), findsOneWidget);
     // Tapping the same thumb again takes the vote back.
-    await tapThumb(tester, Icons.thumb_down_rounded);
+    await tapThumb(tester, CupertinoIcons.hand_thumbsdown_fill);
     expect(find.text('3'), findsOneWidget);
     expect(myVotes.value, isEmpty);
   });
@@ -195,7 +208,7 @@ void main() {
     myVotes.value = {};
     addTearDown(() => isGuest = false);
     await openDau(tester);
-    await tapThumb(tester, Icons.thumb_up_rounded);
+    await tapThumb(tester, CupertinoIcons.hand_thumbsup_fill);
     expect(find.text('Log in to vote'), findsOneWidget);
     expect(find.text('42'), findsOneWidget);
     expect(myVotes.value, isEmpty);
@@ -302,5 +315,11 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(ListPageSkeleton), findsNothing); // Alerts loaded
     expect(find.text('Quick actions'), findsNothing); // Home never built
+  });
+
+  test('Spring curves settle before their time is up (no jump at the end)', () {
+    for (final curve in [kSnappyCurve, kBouncyCurve]) {
+      expect(curve.transform(0.98), closeTo(1, 0.01));
+    }
   });
 }

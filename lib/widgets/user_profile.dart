@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
 import '../theme.dart';
@@ -70,10 +71,7 @@ class UserAvatar extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        color: Color(0xFF2566B8),
-        shape: BoxShape.circle,
-      ),
+      decoration: const BoxDecoration(color: kGraphite, shape: BoxShape.circle),
       child: Text(
         user.initials,
         style: TextStyle(
@@ -133,7 +131,7 @@ class _ProfileCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: const LinearGradient(
-          colors: [kOceanBlue, kSkyBlue, kLogoCyan],
+          colors: [kGraphite, Color(0xFF111113)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -213,7 +211,7 @@ class _ProfileCard extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const Icon(
-                                    Icons.location_on_rounded,
+                                    CupertinoIcons.placemark_fill,
                                     color: Colors.white,
                                     size: 13,
                                   ),
@@ -239,7 +237,7 @@ class _ProfileCard extends StatelessWidget {
                         tooltip: 'Close',
                         onPressed: onClose,
                         icon: const Icon(
-                          Icons.close_rounded,
+                          CupertinoIcons.xmark,
                           color: Colors.white,
                         ),
                       ),
@@ -284,12 +282,12 @@ class _ProfileCard extends StatelessWidget {
                         Row(
                           children: [
                             _stat(
-                              Icons.thumb_up_rounded,
+                              CupertinoIcons.hand_thumbsup_fill,
                               user.upVotes,
                               'Thumbs up',
                             ),
                             _stat(
-                              Icons.thumb_down_rounded,
+                              CupertinoIcons.hand_thumbsdown_fill,
                               user.downVotes,
                               'Thumbs down',
                             ),

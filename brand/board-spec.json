@@ -1,0 +1,54 @@
+{
+  "brand": "AgosAlert",
+  "tagline": "Flood alerts for Mabalacat City",
+  "brief": "A flood-monitoring app for Mabalacat City, Pampanga: live weather, a flood outlook, community flood pins and evacuation centres. It should feel calm, clear and local, and say 'alert' without shouting.",
+  "adjectives": [
+    "calm",
+    "clear",
+    "alert",
+    "local"
+  ],
+  "criteria": "Success: escapes the water-drop clich\u00c3\u00a9 of flood and weather apps, reads at 16 px, works in one colour, fits the black-and-white app with one blue accent.",
+  "industry": "consumer-app",
+  "nav": [
+    "Map",
+    "Alerts",
+    "Hotlines"
+  ],
+  "brand_color": "#0A84FF",
+  "tile_color": "#000000",
+  "greyscale": false,
+  "final": true,
+  "round": 2,
+  "designer": "AgosAlert",
+  "concepts": [
+    {
+      "name": "Current Alert",
+      "symbol": "agosalert-mark.svg",
+      "lockup": "agosalert-horizontal.svg",
+      "symbol_on_tile": "agosalert-mark-reversed.svg",
+      "symbol_on_dark": "agosalert-mark-reversed.svg",
+      "lockup_on_dark": "agosalert-horizontal-reversed.svg",
+      "idea": "An exclamation mark whose dot is a wave: the alert is the water.",
+      "rationale": [
+        "Both halves of the name in one sign: agos (current) and alert",
+        "Built only from circles and tangent arcs; a heavier cut for 32 px and below",
+        "The blue wave rhymes with the blue dot of the wordmark"
+      ]
+    }
+  ],
+  "recommendation": "Current Alert: ownable in a category full of water drops, instant at icon size, and on-system with the app's black, white and one blue.",
+  "next_steps": [
+    "Redo the loading screen around the new mark",
+    "Retake the landing page screenshots",
+    "Trademark search before any official use"
+  ],
+  "mockups": [
+    "app-icon",
+    "website",
+    "social",
+    "signage",
+    "sticker",
+    "tshirt"
+  ]
+}

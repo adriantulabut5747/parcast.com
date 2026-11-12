@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -261,32 +263,31 @@ class FloodOutlook {
 (String, IconData) weatherInfo(int code, {bool isDay = true}) {
   if (code == 0) {
     return isDay
-        ? ('Clear sky', Icons.wb_sunny_rounded)
-        : ('Clear night', Icons.nightlight_round);
+        ? ('Clear sky', CupertinoIcons.sun_max_fill)
+        : ('Clear night', CupertinoIcons.moon_fill);
   }
   if (code <= 2) {
     return isDay
-        ? ('Partly cloudy', Icons.wb_cloudy_rounded)
-        : ('Partly cloudy', Icons.nights_stay_rounded);
+        ? ('Partly cloudy', CupertinoIcons.cloud_fill)
+        : ('Partly cloudy', CupertinoIcons.cloud_moon_fill);
   }
-  if (code == 3) return ('Overcast', Icons.cloud_rounded);
-  if (code <= 48) return ('Foggy', Icons.foggy);
-  if (code <= 57) return ('Drizzle', Icons.grain_rounded);
-  if (code <= 67) return ('Rain', Icons.water_drop_rounded);
-  if (code <= 77) return ('Snow', Icons.ac_unit_rounded);
-  if (code <= 82) return ('Rain showers', Icons.umbrella_rounded);
-  return ('Thunderstorm', Icons.thunderstorm_rounded);
+  if (code == 3) return ('Overcast', CupertinoIcons.cloud_fill);
+  if (code <= 48) return ('Foggy', CupertinoIcons.cloud_fog_fill);
+  if (code <= 57) return ('Drizzle', CupertinoIcons.cloud_drizzle_fill);
+  if (code <= 67) return ('Rain', CupertinoIcons.drop_fill);
+  if (code <= 77) return ('Snow', CupertinoIcons.snow);
+  if (code <= 82) return ('Rain showers', CupertinoIcons.umbrella_fill);
+  return ('Thunderstorm', CupertinoIcons.cloud_bolt_rain_fill);
 }
 
-/// Card background colors that match the weather.
+/// Weather card background: graphite in every theme (like the iPhone's
+/// widgets). Only wet weather gets a hint of blue; the frog on the card
+/// brings the rest of the color.
 List<Color> weatherGradient(int code, bool isDay) {
-  if (!isDay) return const [Color(0xFF1B2556), Color(0xFF0B1130)];
-  if (code == 0 || code <= 2) {
-    return const [Color(0xFF2D7DD2), Color(0xFF29C5F6)];
-  }
-  if (code >= 95) return const [Color(0xFF3B3F6B), Color(0xFF1E2140)];
-  if (code >= 51) return const [Color(0xFF1E4E79), Color(0xFF2D6FA8)];
-  return const [Color(0xFF3A5A80), Color(0xFF5B84B1)];
+  if (code >= 51) return const [Color(0xFF1E2A3A), Color(0xFF0E141D)];
+  if (!isDay) return const [Color(0xFF1A1A1C), Color(0xFF050505)];
+  if (code <= 2) return const [Color(0xFF3A3A3C), Color(0xFF1C1C1E)];
+  return const [Color(0xFF2C2C2E), Color(0xFF161618)];
 }
 
 // 24-hour to 12-hour clock: `% 12` is the remainder after dividing by 12

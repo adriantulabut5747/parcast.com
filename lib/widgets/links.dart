@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -32,7 +33,7 @@ Future<void> confirmCall(
       final c = AppColors(sheet);
       return Column(
         children: [
-          IconBadge(Icons.phone_in_talk_rounded, color, size: 64),
+          IconBadge(CupertinoIcons.phone_fill, color, size: 64),
           const SizedBox(height: 14),
           Text(
             name,
@@ -54,12 +55,9 @@ Future<void> confirmCall(
             ),
           ),
           const SizedBox(height: 20),
-          GradientButton(
+          PrimaryButton(
             label: 'Call now',
-            icon: Icons.call_rounded,
-            gradient: LinearGradient(
-              colors: [color, Color.lerp(color, Colors.white, 0.25)!],
-            ),
+            icon: CupertinoIcons.phone_fill,
             onPressed: () async {
               Navigator.of(sheet).pop();
               final digits = number.replaceAll(RegExp(r'[^0-9+]'), '');

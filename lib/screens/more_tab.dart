@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
 import '../theme.dart';
@@ -30,19 +31,19 @@ class MoreTab extends StatelessWidget {
           delay: const Duration(milliseconds: 80),
           child: _group(c, 'Safety', [
             _Item(
-              Icons.map_rounded,
+              CupertinoIcons.map_fill,
               'Flood map',
-              kSkyBlue,
+              kGray,
               () => HomeShell.of(context)?.switchTab(1),
             ),
             _Item(
-              Icons.night_shelter_rounded,
+              CupertinoIcons.house_alt_fill,
               'Evacuation centers',
-              kSafe,
+              kGray,
               () => push(const EvacuationCentersScreen()),
             ),
             _Item(
-              Icons.phone_in_talk_rounded,
+              CupertinoIcons.phone_fill,
               'Emergency hotlines',
               kDanger,
               () => HomeShell.of(context)?.switchTab(3),
@@ -54,21 +55,21 @@ class MoreTab extends StatelessWidget {
           delay: const Duration(milliseconds: 140),
           child: _group(c, 'App', [
             _Item(
-              Icons.tune_rounded,
+              CupertinoIcons.slider_horizontal_3,
               'Settings',
-              const Color(0xFF6366F1),
+              kGray,
               () => push(const SettingsScreen()),
             ),
             _Item(
-              Icons.help_rounded,
+              CupertinoIcons.question_circle_fill,
               'Help & FAQ',
-              const Color(0xFF14B8A6),
+              kGray,
               () => push(const HelpScreen()),
             ),
             _Item(
-              Icons.info_rounded,
+              CupertinoIcons.info_circle_fill,
               'About AgosAlert',
-              kLogoCyan,
+              kGray,
               () => push(const AboutScreen()),
             ),
           ]),
@@ -78,7 +79,7 @@ class MoreTab extends StatelessWidget {
           delay: const Duration(milliseconds: 200),
           child: _group(c, null, [
             _Item(
-              Icons.logout_rounded,
+              CupertinoIcons.square_arrow_right,
               'Log out',
               kDanger,
               () => confirmLogout(context),
@@ -92,7 +93,7 @@ class MoreTab extends StatelessWidget {
             children: [
               Opacity(
                 opacity: 0.8,
-                child: const BrandLogo.wordmark(height: 20),
+                child: const BrandLogo.wordmark(height: 26),
               ),
               const SizedBox(height: 6),
               Text(
@@ -111,17 +112,10 @@ class MoreTab extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         gradient: const LinearGradient(
-          colors: [kOceanBlue, kSkyBlue, kLogoCyan],
+          colors: [kGraphite, Color(0xFF111113)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: kSkyBlue.withValues(alpha: 0.4),
-            blurRadius: 26,
-            offset: const Offset(0, 10),
-          ),
-        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
@@ -154,7 +148,7 @@ class MoreTab extends StatelessWidget {
                         alignment: Alignment.center,
                         child: isGuest
                             ? const Icon(
-                                Icons.person_rounded,
+                                CupertinoIcons.person_fill,
                                 color: Colors.white,
                                 size: 32,
                               )
@@ -204,8 +198,8 @@ class MoreTab extends StatelessWidget {
                                 children: [
                                   Icon(
                                     isGuest
-                                        ? Icons.visibility_rounded
-                                        : Icons.location_on_rounded,
+                                        ? CupertinoIcons.eye_fill
+                                        : CupertinoIcons.placemark_fill,
                                     color: Colors.white,
                                     size: 13,
                                   ),
@@ -279,12 +273,12 @@ class MoreTab extends StatelessWidget {
           Row(
             children: [
               _voteStat(
-                Icons.thumb_up_rounded,
+                CupertinoIcons.hand_thumbsup_fill,
                 kMyUpVotesReceived,
                 'Thumbs up',
               ),
               _voteStat(
-                Icons.thumb_down_rounded,
+                CupertinoIcons.hand_thumbsdown_fill,
                 kMyDownVotesReceived,
                 'Thumbs down',
               ),
@@ -369,7 +363,7 @@ class MoreTab extends StatelessWidget {
               ),
             ),
             if (!item.destructive)
-              Icon(Icons.chevron_right_rounded, color: c.textSecondary),
+              Icon(CupertinoIcons.chevron_right, color: c.textSecondary),
           ],
         ),
       ),

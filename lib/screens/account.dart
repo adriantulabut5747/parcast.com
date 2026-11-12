@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../data/demo_data.dart';
@@ -35,9 +36,8 @@ void _restartAs(BuildContext context, {required bool guest}) {
   myVotes.value = {};
   // pushAndRemoveUntil(..., (_) => false) removes every screen behind the
   // new one, so the back button can't return to the old session.
-  Navigator.of(
-    context,
-  ).pushAndRemoveUntil(slideRoute(const HomeShell()), (_) => false);
+  Navigator.of(context)
+      .pushAndRemoveUntil(slideRoute(const HomeShell()), (_) => false);
 }
 
 /// Popup for guests who tap something only logged-in users can do, like
@@ -65,7 +65,7 @@ Future<void> showLoginRequired(BuildContext context, {required String action}) {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const IconBadge(Icons.lock_rounded, kSkyBlue, size: 60),
+                    const IconBadge(CupertinoIcons.lock_fill, kBlue, size: 60),
                     const SizedBox(height: 14),
                     Text(
                       'Log in to $action',
@@ -88,9 +88,9 @@ Future<void> showLoginRequired(BuildContext context, {required String action}) {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    GradientButton(
+                    PrimaryButton(
                       label: 'Log in',
-                      icon: Icons.arrow_forward_rounded,
+                      icon: CupertinoIcons.arrow_right,
                       onPressed: () {
                         Navigator.of(dialogContext).pop();
                         logIn(context);
@@ -131,7 +131,7 @@ void confirmLogout(BuildContext context) {
       final c = AppColors(sheet);
       return Column(
         children: [
-          const IconBadge(Icons.logout_rounded, kDanger, size: 60),
+          const IconBadge(CupertinoIcons.square_arrow_right, kDanger, size: 60),
           const SizedBox(height: 14),
           Text(
             'Log out?',
@@ -147,11 +147,9 @@ void confirmLogout(BuildContext context) {
             style: TextStyle(color: c.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 20),
-          GradientButton(
+          PrimaryButton(
             label: 'Log out',
-            gradient: const LinearGradient(
-              colors: [Color(0xFFDC2626), Color(0xFFEF4444)],
-            ),
+            color: kDanger,
             onPressed: () {
               if (kIsWeb) {
                 goToLanding();

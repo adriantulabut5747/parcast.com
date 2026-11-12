@@ -1,44 +1,41 @@
 import 'dart:math' as math;
-import 'dart:ui';
+
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 
 import '../data/demo_data.dart';
 import '../services/weather.dart';
 import '../theme.dart';
+import '../widgets/agos_icons.dart';
+import '../widgets/agos_map.dart';
 import '../widgets/common.dart';
 import '../widgets/flood_depth.dart';
-import '../widgets/map_tiles.dart';
+import '../widgets/links.dart';
+import '../widgets/map_glass.dart';
 import '../widgets/responsive.dart';
 import '../widgets/user_profile.dart';
 import '../widgets/vote_bar.dart';
-import '../widgets/links.dart';
 import 'deferred_screens.dart';
 
 /// ============================================================
-/// MAP TAB — interactive map of Mabalacat City (Esri tiles, see
-/// widgets/map_tiles.dart) with flood zones and evacuation centers
+/// MAP TAB — Mabalacat City in 3D, with flood reports and shelters
 /// ============================================================
 ///
-/// How the map is built: FlutterMap draws its `children` as layers, the
-/// first one at the bottom:
-///   1. AppTileLayer  - the map pictures (streets, place names)
-///   2. CircleLayer   - the colored flood-zone circles
-///   3. MarkerLayer   - the tappable pins (flood zones + evacuation centers)
-///   4. the credits text
-/// The header, zoom buttons, and legend are NOT part of the map; they
-/// float on top of it in the outer Stack.
+/// The map itself is AgosMap (widgets/agos_map.dart): MapLibre in the
+/// browser, drawn from map files that ship with the app (web/map/, made by
+/// tools/make_map.py). It opens flat, like a paper map; the 3D button (or
+/// tilting with two fingers) raises the buildings and the hills.
 ///
-/// The map can't be dragged outside this box (Mabalacat City and a little
-/// margin around it). Lives here, not in demo_data.dart, so the map
-/// package stays out of the app's first download.
-final LatLngBounds kMabalacatBounds = LatLngBounds(
-  const LatLng(15.130, 120.490), // south-west
-  const LatLng(15.300, 120.670), // north-east
-);
-
+/// Everything else floats on top, iPhone Maps style:
+///   phones/tablets  header (title + filters) top left, round controls
+///                   top right, and a glass panel at the bottom with the
+///                   depth legend, Report, and the reports as swipeable
+///                   cards (swiping flies the map to that report).
+///   desktop         a side panel with the lists, the map next to it.
+/// Anything floating over the web map is wrapped in MapGlass, which gives
+/// it real blur and stops its taps from reaching the map.
 class MapTab extends StatefulWidget {
   const MapTab({super.key});
 
@@ -47,35 +44,78 @@ class MapTab extends StatefulWidget {
 }
 
 class _MapTabState extends State<MapTab> {
-  // Lets our own code move the map (zoom buttons, recenter, jumping to a
-  // tapped pin). The user's own dragging doesn't need it.
-  final _map = MapController();
-  // The two filter chips at the top. Flipping one with setState rebuilds
-  // the map with that layer added or removed.
+  final _map = AgosMapController();
   bool _showZones = true;
   bool _showCenters = true;
+  // The pin that's highlighted (bigger) on the map and in the lists.
+  String? _selected;
+
+  // The report cards in the bottom panel: deepest water first.
+  late final List<FloodZone> _zones = activeFloodZones.toList()
+    ..sort((a, b) => b.depthCm.compareTo(a.depthCm));
+  PageController? _cards;
+  double _cardsFraction = 0;
 
   // Zoom levels: each +1 doubles the detail. 13 shows the whole city,
-  // 18 shows single streets and buildings.
+  // 18 single streets and buildings.
   static const _startZoom = 13.3;
+  static const _pinZoom = 15.5;
 
-  // Zoom in (by = 1) or out (by = -1) around the current center.
-  // .clamp(13, 18) keeps the result between 13 and 18, matching minZoom
-  // and maxZoom below, so the buttons can't go past the limits.
+  // Phone/tablet bottom panel height (fixed, so the map knows how much of
+  // it is covered).
+  static const _panelHeight = 168.0;
+
+  static String _zoneId(FloodZone z) => 'zone-${z.barangay}';
+  static String _centerId(EvacuationCenter e) => 'center-${e.name}';
+
+  late final List<MapPin> _pins = [
+    for (final z in _zones)
+      MapPin(
+        id: _zoneId(z),
+        kind: PinKind.flood,
+        point: z.point,
+        color: z.risk.color,
+        icon: AgosIcons.flood,
+        title: z.barangay,
+        chip: FloodLevel.of(z.depthCm) == FloodLevel.dry
+            ? 'Dry'
+            : formatCm(z.depthCm),
+        pulse: z.risk == RiskLevel.high,
+        a11y: 'Brgy. ${z.barangay}, ${formatCm(z.depthCm)}',
+      ),
+    for (final e in kEvacCenters)
+      MapPin(
+        id: _centerId(e),
+        kind: PinKind.shelter,
+        point: e.point,
+        color: e.open ? kSafe : kGray,
+        icon: e.icon,
+        title: e.name,
+        a11y: '${e.name}, evacuation center, ${e.open ? 'open' : 'standby'}',
+      ),
+  ];
+
+  // A see-through circle around each report (bigger for high risk).
+  late final List<MapZone> _rings = [
+    for (final z in _zones)
+      MapZone(z.point, z.risk == RiskLevel.high ? 650 : 480, z.risk.color),
+  ];
+
   // "View on map" on the Home feed sets focusedZone and switches to this
-  // tab; we then jump to that pin and open it. Checked once at start too,
+  // tab; we then fly to that pin and open it. Checked once at start too,
   // in case this tab was only just opened (and downloaded) for it.
   @override
   void initState() {
     super.initState();
     focusedZone.addListener(_openFocused);
-    // After the first frame, so the map exists before we move it.
     WidgetsBinding.instance.addPostFrameCallback((_) => _openFocused());
   }
 
   @override
   void dispose() {
     focusedZone.removeListener(_openFocused);
+    _map.dispose();
+    _cards?.dispose();
     super.dispose();
   }
 
@@ -86,558 +126,542 @@ class _MapTabState extends State<MapTab> {
     _showZone(context, z);
   }
 
-  void _zoom(double by) {
-    final cam = _map.camera;
-    _map.move(cam.center, (cam.zoom + by).clamp(13, 18));
+  void _onPinTap(String id) {
+    for (final z in _zones) {
+      if (_zoneId(z) == id) return _showZone(context, z);
+    }
+    for (final e in kEvacCenters) {
+      if (_centerId(e) == id) return _showCenter(context, e);
+    }
   }
+
+  // Highlights a pin, flies there, and brings its card into view.
+  void _focus(String id, LatLng point) {
+    setState(() => _selected = id);
+    _map.flyTo(point, zoom: _pinZoom);
+    final i = _zones.indexWhere((z) => _zoneId(z) == id);
+    final cards = _cards;
+    if (i >= 0 && cards != null && cards.hasClients) {
+      if (cards.page?.round() != i) {
+        cards.animateToPage(
+          i,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
+  }
+
+  void _recenter() {
+    setState(() => _selected = null);
+    _map.reset(kMabalacatCenter, _startZoom);
+  }
+
+  Set<PinKind> get _hidden => {
+    if (!_showZones) PinKind.flood,
+    if (!_showCenters) PinKind.shelter,
+  };
 
   @override
   Widget build(BuildContext context) {
     final c = AppColors(context);
-    // Desktop: a side panel (title, report, layers, list of pins, legend)
-    // next to the map. Phones and tablets: everything floats on the map.
+    // Desktop: a side panel (lists, layers, report) next to the map.
+    // Phones and tablets: everything floats on the map.
     if (screenSizeOf(context) == ScreenSize.desktop) return _desktop(c);
     return _floatingLayout(c, wide: isWideScreen(context));
   }
 
-  // The map itself, with its layers. Used by both layouts.
-  Widget _mapView(AppColors c) {
-    return FlutterMap(
-      mapController: _map,
-      options: MapOptions(
-        initialCenter: kMabalacatCenter,
-        initialZoom: _startZoom,
-        minZoom: 13,
-        // Keep the whole view inside Mabalacat City.
-        cameraConstraint: CameraConstraint.contain(bounds: kMabalacatBounds),
-        maxZoom: 18,
-        backgroundColor: c.surfaceAlt,
-        // Allow every gesture (drag, pinch, double-tap zoom...)
-        // except rotating. The flags are bits: `& ~rotate` means
-        // "all of them, minus the rotate bit". A rotated map
-        // confuses people and there's no compass to reset it.
-        interactionOptions: const InteractionOptions(
-          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-        ),
-      ),
-      children: [
-        const AppTileLayer(),
-        // A see-through circle around each flood zone.
-        // useRadiusInMeter: the radius is in real meters on the
-        // ground (650 m for high risk, 480 m otherwise), so the
-        // circle grows/shrinks with the map when zooming, instead
-        // of staying the same size on screen.
-        if (_showZones)
-          CircleLayer(
-            circles: [
-              for (final z in activeFloodZones)
-                CircleMarker(
-                  point: z.point,
-                  radius: z.risk == RiskLevel.high ? 650 : 480,
-                  useRadiusInMeter: true,
-                  color: z.risk.color.withValues(alpha: 0.18),
-                  borderColor: z.risk.color.withValues(alpha: 0.6),
-                  borderStrokeWidth: 1.5,
-                ),
-            ],
-          ),
-        // Pins are normal Flutter widgets pinned to a map
-        // coordinate (`point`). One MarkerLayer holds both kinds;
-        // `if` + `for` inside the list add each group only when
-        // its filter chip is on. Flood pins show their depth so
-        // the map can be read without tapping anything.
-        MarkerLayer(
-          markers: [
-            if (_showZones)
-              for (final z in activeFloodZones)
-                Marker(
-                  point: z.point,
-                  width: _DepthPin.size,
-                  height: _DepthPin.size,
-                  child: _DepthPin(zone: z, onTap: () => _showZone(context, z)),
-                ),
-            if (_showCenters)
-              for (final e in kEvacCenters)
-                Marker(
-                  point: e.point,
-                  width: 38,
-                  height: 38,
-                  child: GestureDetector(
-                    onTap: () => _showCenter(context, e),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: e.open ? kSafe : const Color(0xFF94A3B8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white, width: 2),
-                        boxShadow: const [
-                          BoxShadow(color: Color(0x55000000), blurRadius: 8),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.night_shelter_rounded,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ),
-          ],
-        ),
-        // Map credits (the tile license from Esri and
-        // OpenStreetMap requires showing them)
-        Align(
-          alignment: Alignment.topLeft,
-          child: Container(
-            margin: const EdgeInsets.only(left: 14, top: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: c.surface.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              AppTileLayer.credits,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: c.textSecondary, fontSize: 9.5),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _mapView(EdgeInsets padding) => AgosMap(
+    controller: _map,
+    pins: _pins,
+    zones: _rings,
+    hidden: _hidden,
+    selectedId: _selected,
+    onPinTap: _onPinTap,
+    zoom: _startZoom,
+    padding: padding,
+  );
 
+  // ------------------------------------------------------------ phones
   Widget _floatingLayout(AppColors c, {required bool wide}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: Stack(
-          children: [
-            _mapView(c),
-            // Header + layer toggles
-            Positioned(
-              top: 30,
-              left: 12,
-              right: 12,
-              child: _glass(
-                c,
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const LiveDot(color: kDanger),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Flood map',
-                          style: TextStyle(
-                            color: c.textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const SampleBadge(),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Tap a pin for details',
-                            textAlign: TextAlign.right,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: c.textSecondary,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        SelectChip(
-                          label: 'Flood zones',
-                          icon: Icons.flood_rounded,
-                          selected: _showZones,
-                          onTap: () => setState(() => _showZones = !_showZones),
-                        ),
-                        SelectChip(
-                          label: 'Evacuation',
-                          icon: Icons.night_shelter_rounded,
-                          color: kSafe,
-                          selected: _showCenters,
-                          onTap: () =>
-                              setState(() => _showCenters = !_showCenters),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Bottom controls, stacked in one column so they can't overlap
-            // on small screens: Report + zoom buttons, then the legend.
-            // The empty space between them lets taps through to the map.
-            Positioned(
-              left: 12,
-              right: 12,
-              // Phones: above the floating bottom nav. Tablets have none.
-              bottom: wide ? 24 : 96,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _reportButton(c),
-                      const Spacer(),
-                      Column(
-                        children: [
-                          _mapButton(
-                            c,
-                            Icons.add_rounded,
-                            'Zoom in',
-                            () => _zoom(1),
-                          ),
-                          const SizedBox(height: 8),
-                          _mapButton(
-                            c,
-                            Icons.remove_rounded,
-                            'Zoom out',
-                            () => _zoom(-1),
-                          ),
-                          const SizedBox(height: 8),
-                          _mapButton(
-                            c,
-                            Icons.my_location_rounded,
-                            'Recenter',
-                            () => _map.move(kMabalacatCenter, _startZoom),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Legend: one depth scale, low to high, left to right.
-                  _glass(
-                    c,
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'STREET FLOOD DEPTH',
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            _legend(c, kSafe, 'Normal', 'up to 20 cm'),
-                            const SizedBox(width: 4),
-                            _legend(c, kCaution, 'Moderate', '21–50 cm'),
-                            const SizedBox(width: 4),
-                            _legend(c, kDanger, 'High', 'over 50 cm'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _desktop(AppColors c) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(width: 360, child: _sidePanel(c)),
-          const SizedBox(width: 20),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Stack(
-                children: [
-                  _mapView(c),
-                  Positioned(
-                    right: 16,
-                    bottom: 16,
-                    child: Column(
-                      spacing: 8,
-                      children: [
-                        _mapButton(
-                          c,
-                          Icons.add_rounded,
-                          'Zoom in',
-                          () => _zoom(1),
-                        ),
-                        _mapButton(
-                          c,
-                          Icons.remove_rounded,
-                          'Zoom out',
-                          () => _zoom(-1),
-                        ),
-                        _mapButton(
-                          c,
-                          Icons.my_location_rounded,
-                          'Recenter',
-                          () => _map.move(kMabalacatCenter, _startZoom),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    // The map runs under the shell's glass top bar; `top` is that bar's
+    // height (handed down as MediaQuery padding by HomeShell).
+    final top = MediaQuery.paddingOf(context).top;
+    // Phones: the panel sits above the floating bottom nav. Tablets have
+    // none, and their panel doesn't stretch across the whole screen.
+    final bottom = wide ? 16.0 : 96.0;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: _mapView(
+            EdgeInsets.fromLTRB(0, top + 130, 64, bottom + _panelHeight + 8),
           ),
-        ],
-      ),
-    );
-  }
-
-  // Desktop: everything that floats on the phone map, as a quiet column:
-  // what to show, the reports (deepest water first), and a way to add one.
-  Widget _sidePanel(AppColors c) {
-    final zones = activeFloodZones.toList()
-      ..sort((a, b) => b.depthCm.compareTo(a.depthCm));
-    final orange = c.isDark ? const Color(0xFFFB923C) : const Color(0xFFC2410C);
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+        ),
+        Positioned(
+          top: top + 10,
+          left: 12,
+          right: 12,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Flood map',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: _header(c),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
-              const SampleBadge(),
+              _controls(c, zoomButtons: wide),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Reports from residents · Mabalacat City',
-            style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-          ),
-          const SizedBox(height: 14),
-          _layerCheck(
-            c,
-            'Flood reports',
-            zones.length,
-            _showZones,
-            () => setState(() => _showZones = !_showZones),
-          ),
-          _layerCheck(
-            c,
-            'Evacuation centers',
-            kEvacCenters.length,
-            _showCenters,
-            () => setState(() => _showCenters = !_showCenters),
-          ),
-          Divider(height: 24, color: c.border),
-          const FieldLabel('Deepest first'),
-          Expanded(
-            child: ListView.builder(
-              itemCount: zones.length,
-              itemBuilder: (context, i) => _pinRow(c, zones[i]),
-            ),
-          ),
-          Divider(height: 20, color: c.border),
-          // The depth colors (wraps onto two lines if the panel is narrow).
-          Wrap(
-            spacing: 14,
-            runSpacing: 6,
-            children: [
-              _legendDot(c, kSafe, 'Up to 20 cm'),
-              _legendDot(c, kCaution, '21–50 cm'),
-              _legendDot(c, kDanger, 'Over 50 cm'),
-            ],
-          ),
-          const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: () => openReportIncident(context),
-            icon: const Icon(Icons.campaign_rounded, size: 19),
-            label: const Text('Report flooding near you'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: orange,
-              side: BorderSide(color: orange.withValues(alpha: 0.6)),
-              minimumSize: const Size.fromHeight(44),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              textStyle: const TextStyle(
-                fontFamily: kFontFamily,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // A checkbox row that turns a map layer on or off.
-  Widget _layerCheck(
-    AppColors c,
-    String label,
-    int count,
-    bool value,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
-      child: Row(
-        children: [
-          Checkbox(
-            value: value,
-            onChanged: (_) => onTap(),
-            activeColor: kSkyBlue,
-            visualDensity: VisualDensity.compact,
-          ),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Text(
-            '$count',
-            style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
-    );
-  }
-
-  Widget _legendDot(AppColors c, Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 6),
-        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: bottom,
+          height: _panelHeight,
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: _bottomPanel(c),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  // One report in the side panel: the depth (in its risk color) is what
-  // matters most, so it leads. Clicking jumps the map there and opens it.
-  Widget _pinRow(AppColors c, FloodZone z) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: () => _showZone(context, z),
+  Widget _glass(AppColors c, {required Widget child, double radius = 22}) {
+    return MapGlass(
+      radius: radius,
+      child: GlassCard(radius: radius, padding: EdgeInsets.zero, child: child),
+    );
+  }
+
+  // Title, live counts, and the two layer filters.
+  Widget _header(AppColors c) {
+    final open = kEvacCenters.where((e) => e.open).length;
+    return _glass(
+      c,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 58,
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '${z.depthCm.round()}',
-                      style: TextStyle(
-                        color: z.risk.color,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
+            Row(
+              children: [
+                const LiveDot(color: kDanger),
+                const SizedBox(width: 6),
+                Text(
+                  'Flood map',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const SampleBadge(),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${_zones.length} reports · $open of ${kEvacCenters.length} '
+              'shelters open',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                SelectChip(
+                  label: 'Flood zones',
+                  icon: AgosIcons.flood,
+                  selected: _showZones,
+                  onTap: () => setState(() => _showZones = !_showZones),
+                ),
+                SelectChip(
+                  label: 'Evacuation',
+                  icon: CupertinoIcons.house_alt_fill,
+                  color: kSafe,
+                  selected: _showCenters,
+                  onTap: () => setState(() => _showCenters = !_showCenters),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // The round controls, iPhone Maps style: one glass capsule (3D, back to
+  // the city, and zoom on bigger screens), with a compass under it that
+  // only appears while the map is turned.
+  Widget _controls(AppColors c, {required bool zoomButtons}) {
+    Widget divider() => Container(
+      width: 26,
+      height: 1,
+      color: c.textPrimary.withValues(alpha: 0.12),
+    );
+    return Column(
+      children: [
+        _glass(
+          c,
+          radius: 24,
+          child: SizedBox(
+            width: 48,
+            child: Column(
+              children: [
+                ValueListenableBuilder<double>(
+                  valueListenable: _map.pitch,
+                  builder: (context, pitch, _) {
+                    final is3d = pitch > 12;
+                    return _ctrlButton(
+                      c,
+                      tooltip: is3d ? 'Flat view' : '3D view',
+                      onTap: () => _map.set3d(!is3d),
+                      child: Text(
+                        is3d ? '2D' : '3D',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                divider(),
+                _ctrlButton(
+                  c,
+                  tooltip: 'Back to the city',
+                  onTap: _recenter,
+                  child: Icon(
+                    CupertinoIcons.location_fill,
+                    size: 19,
+                    color: c.accent,
+                  ),
+                ),
+                if (zoomButtons) ...[
+                  divider(),
+                  _ctrlButton(
+                    c,
+                    tooltip: 'Zoom in',
+                    onTap: () => _map.zoomBy(1),
+                    child: Icon(
+                      CupertinoIcons.plus,
+                      size: 20,
+                      color: c.textPrimary,
+                    ),
+                  ),
+                  divider(),
+                  _ctrlButton(
+                    c,
+                    tooltip: 'Zoom out',
+                    onTap: () => _map.zoomBy(-1),
+                    child: Icon(
+                      CupertinoIcons.minus,
+                      size: 20,
+                      color: c.textPrimary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        ValueListenableBuilder<double>(
+          valueListenable: _map.bearing,
+          builder: (context, bearing, _) {
+            final turned = bearing.abs() > 1;
+            return AnimatedScale(
+              scale: turned ? 1 : 0,
+              duration: const Duration(milliseconds: 450),
+              curve: turned ? kBouncyCurve : Curves.easeIn,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: _glass(
+                  c,
+                  radius: 24,
+                  child: _ctrlButton(
+                    c,
+                    tooltip: 'Turn north up',
+                    onTap: _map.resetNorth,
+                    child: Transform.rotate(
+                      angle: -bearing * math.pi / 180,
+                      child: CustomPaint(
+                        size: const Size(26, 26),
+                        painter: _CompassPainter(c.textPrimary),
                       ),
                     ),
-                    TextSpan(
-                      text: ' cm',
-                      style: TextStyle(color: c.textSecondary, fontSize: 11),
-                    ),
-                  ],
+                  ),
                 ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _ctrlButton(
+    AppColors c, {
+    required String tooltip,
+    required VoidCallback onTap,
+    required Widget child,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: PressableScale(
+        onTap: onTap,
+        child: SizedBox(width: 48, height: 48, child: Center(child: child)),
+      ),
+    );
+  }
+
+  // Legend + Report on top, then the reports as cards you can swipe.
+  Widget _bottomPanel(AppColors c) {
+    return _glass(
+      c,
+      radius: 26,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: _legend(c)),
+                const SizedBox(width: 12),
+                _reportButton(c),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  // Each card ~240 wide, so the next one peeks in.
+                  final f = math.min(1.0, 248 / box.maxWidth);
+                  if (_cards == null || (f - _cardsFraction).abs() > 0.01) {
+                    final page = _cards?.hasClients == true
+                        ? _cards!.page?.round() ?? 0
+                        : 0;
+                    _cards?.dispose();
+                    _cards = PageController(
+                      viewportFraction: f,
+                      initialPage: page,
+                    );
+                    _cardsFraction = f;
+                  }
+                  return PageView.builder(
+                    controller: _cards,
+                    padEnds: false,
+                    itemCount: _zones.length,
+                    // Swiping to a card flies the map to that report.
+                    onPageChanged: (i) =>
+                        _focus(_zoneId(_zones[i]), _zones[i].point),
+                    itemBuilder: (context, i) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _reportCard(c, _zones[i]),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _reportCard(AppColors c, FloodZone z) {
+    final selected = _selected == _zoneId(z);
+    final level = FloodLevel.of(z.depthCm);
+    return PressableScale(
+      onTap: () => _showZone(context, z),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: c.surfaceAlt,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? c.accent : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            // The depth leads: it's what people need to know first.
+            SizedBox(
+              width: 58,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: level == FloodLevel.dry
+                              ? '0'
+                              : '${z.depthCm.round()}',
+                          style: TextStyle(
+                            color: z.risk.color,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1,
+                            height: 1,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' cm',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Container(
+                    height: 3,
+                    width: 30,
+                    decoration: BoxDecoration(
+                      color: z.risk.color,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ],
               ),
             ),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Brgy. ${z.barangay}',
+                    z.barangay,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: c.textPrimary,
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${FloodLevel.of(z.depthCm).label} · ${z.updated}',
-                    maxLines: 1,
+                    '${level.label} · ${z.updated}',
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, size: 20, color: c.textSecondary),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 16,
+              color: c.textSecondary.withValues(alpha: 0.6),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  // The depth scale, low to high (same cut-offs as flood_depth.dart).
+  Widget _legend(AppColors c) {
+    Widget step(Color color, String label) => Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 4,
+            margin: const EdgeInsets.only(right: 3),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'STREET FLOOD DEPTH',
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            step(kSafe, '≤ 20 cm'),
+            step(kCaution, '21–50'),
+            step(kDanger, '50+ cm'),
+          ],
+        ),
+      ],
     );
   }
 
   // Shortcut to Report incident (same screen as in Assistance).
   Widget _reportButton(AppColors c) {
     return Tooltip(
-      message: 'Report an incident',
+      message: 'Report flooding',
       child: PressableScale(
         onTap: () => openReportIncident(context),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            // A darker orange than the Assistance tile, so the white text
-            // is easy to read.
-            color: const Color(0xFFC2410C),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [BoxShadow(color: c.shadow, blurRadius: 10)],
+            color: c.inverse,
+            borderRadius: BorderRadius.circular(19),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.campaign_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
+              Icon(CupertinoIcons.plus, color: c.onInverse, size: 16),
+              const SizedBox(width: 6),
               Text(
                 'Report',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: c.onInverse,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -649,87 +673,244 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
-  Widget _glass(
+  // ----------------------------------------------------------- desktop
+  // Desktop: the map fills the whole window (under the glass top bar),
+  // and the side panel, controls and legend float on it as glass.
+  Widget _desktop(AppColors c) {
+    final top = MediaQuery.paddingOf(context).top;
+    const gap = 16.0;
+    const panel = 360.0;
+    const mapLeft = panel + gap * 2;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: _mapView(
+            const EdgeInsets.fromLTRB(
+              mapLeft,
+              gap,
+              72,
+              60,
+            ).copyWith(top: top + gap),
+          ),
+        ),
+        Positioned(
+          top: top + gap,
+          left: gap,
+          bottom: gap,
+          width: panel,
+          child: _sidePanel(c),
+        ),
+        Positioned(
+          top: top + gap,
+          right: gap,
+          child: _controls(c, zoomButtons: true),
+        ),
+        Positioned(
+          left: mapLeft,
+          bottom: gap,
+          width: 280,
+          child: _glass(
+            c,
+            radius: 18,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+              child: _legend(c),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Desktop: everything that floats on the phone map, as a quiet column:
+  // what to show, the reports (deepest water first), the shelters, and a
+  // way to add a report.
+  Widget _sidePanel(AppColors c) {
+    return _glass(
+      c,
+      radius: 24,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Flood map',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const SampleBadge(),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Reports from residents · Mabalacat City',
+              style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                SelectChip(
+                  label: 'Flood zones · ${_zones.length}',
+                  icon: AgosIcons.flood,
+                  selected: _showZones,
+                  onTap: () => setState(() => _showZones = !_showZones),
+                ),
+                SelectChip(
+                  label: 'Evacuation · ${kEvacCenters.length}',
+                  icon: CupertinoIcons.house_alt_fill,
+                  color: kSafe,
+                  selected: _showCenters,
+                  onTap: () => setState(() => _showCenters = !_showCenters),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView(
+                // No automatic top padding (the tab passes the top bar's
+                // height down as MediaQuery padding).
+                padding: EdgeInsets.zero,
+                children: [
+                  const FieldLabel('Deepest first'),
+                  for (final z in _zones) _pinRow(c, z),
+                  const SizedBox(height: 10),
+                  const FieldLabel('Evacuation centers'),
+                  for (final e in kEvacCenters) _centerRow(c, e),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            PrimaryButton(
+              label: 'Report flooding',
+              icon: CupertinoIcons.plus,
+              onPressed: () => openReportIncident(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // A pressable row in the side panel, tinted while its pin is picked.
+  Widget _row(
     AppColors c, {
-    required Widget child,
-    required EdgeInsets padding,
+    required String id,
+    required VoidCallback onTap,
+    required Widget leading,
+    required String title,
+    required String subtitle,
   }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: c.surface.withValues(alpha: 0.8),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: c.border),
-          ),
-          child: child,
+    final selected = _selected == id;
+    return PressableScale(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected ? c.surfaceAlt : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            SizedBox(width: 58, child: leading),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: c.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 16,
+              color: c.textSecondary.withValues(alpha: 0.6),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _mapButton(
-    AppColors c,
-    IconData icon,
-    String tooltip,
-    VoidCallback onTap,
-  ) {
-    return Tooltip(
-      message: tooltip,
-      child: PressableScale(
-        onTap: onTap,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: c.border),
-            boxShadow: [BoxShadow(color: c.shadow, blurRadius: 10)],
-          ),
-          child: Icon(icon, color: c.textPrimary, size: 22),
-        ),
-      ),
-    );
-  }
-
-  // One segment of the legend's scale: a colored bar with its label under.
-  Widget _legend(AppColors c, Color color, String label, String range) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _pinRow(AppColors c, FloodZone z) => _row(
+    c,
+    id: _zoneId(z),
+    onTap: () => _showZone(context, z),
+    leading: Text.rich(
+      TextSpan(
         children: [
-          Container(
-            height: 5,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
+          TextSpan(
+            text: '${z.depthCm.round()}',
             style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
+              color: z.risk.color,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          Text(range, style: TextStyle(color: c.textSecondary, fontSize: 10)),
+          TextSpan(
+            text: ' cm',
+            style: TextStyle(color: c.textSecondary, fontSize: 11),
+          ),
         ],
       ),
-    );
-  }
+    ),
+    title: 'Brgy. ${z.barangay}',
+    subtitle: '${FloodLevel.of(z.depthCm).label} · ${z.updated}',
+  );
 
-  // Tapping a flood-zone pin: zoom the map in on it (zoom 15), then slide
+  Widget _centerRow(AppColors c, EvacuationCenter e) => _row(
+    c,
+    id: _centerId(e),
+    onTap: () => _showCenter(context, e),
+    leading: Align(
+      alignment: Alignment.centerLeft,
+      child: IconBadge(
+        e.icon,
+        e.open ? kSafe : kGray,
+        size: 34,
+        squircle: true,
+      ),
+    ),
+    title: e.name,
+    subtitle: e.open
+        ? 'Open · ${e.occupants} of ${e.capacity} people'
+        : 'Standby · not open yet',
+  );
+
+  // ------------------------------------------------------------ sheets
+  // Tapping a flood pin (or its card/row): fly the map to it, then slide
   // up a details sheet. `sheet` is the sheet's own context, used to close
   // it (Navigator.of(sheet).pop()) before opening Google Maps.
   void _showZone(BuildContext context, FloodZone z) {
     final color = z.risk.color;
-    _map.move(z.point, 15);
+    _focus(_zoneId(z), z.point);
     showAppSheet(
       context,
       maxWidth: 600,
@@ -824,9 +1005,9 @@ class _MapTabState extends State<MapTab> {
             const SizedBox(height: 18),
             VoteBar(zone: z),
             const SizedBox(height: 22),
-            GradientButton(
+            PrimaryButton(
               label: 'Directions',
-              icon: Icons.directions_rounded,
+              icon: CupertinoIcons.arrow_up_right_diamond_fill,
               onPressed: () {
                 Navigator.of(sheet).pop();
                 openDirections(context, z.point);
@@ -839,12 +1020,12 @@ class _MapTabState extends State<MapTab> {
   }
 
   void _showCenter(BuildContext context, EvacuationCenter e) {
-    _map.move(e.point, 15);
+    _focus(_centerId(e), e.point);
     showAppSheet(
       context,
       builder: (sheet) {
         final c = AppColors(sheet);
-        final color = e.open ? kSafe : const Color(0xFF94A3B8);
+        final color = e.open ? kSafe : kGray;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -908,9 +1089,9 @@ class _MapTabState extends State<MapTab> {
               ],
             ),
             const SizedBox(height: 20),
-            GradientButton(
+            PrimaryButton(
               label: 'Directions',
-              icon: Icons.directions_rounded,
+              icon: CupertinoIcons.arrow_up_right_diamond_fill,
               onPressed: () {
                 Navigator.of(sheet).pop();
                 openDirections(context, e.point);
@@ -958,151 +1139,31 @@ class _MapTabState extends State<MapTab> {
   };
 }
 
-/// A flood pin: a classic map pin (colored by risk) whose tip sits exactly
-/// on the spot, with the depth ("45 cm") in a small tag above it.
-/// High-risk pins send out a ring on the ground that keeps growing and
-/// fading (like a radar ping) so they stand out.
-///
-/// flutter_map puts the CENTER of a marker on its `point`, so the marker
-/// is a square with the pin's tip at its center; the pin and tag use the
-/// top half (and taps anywhere on them count).
-class _DepthPin extends StatefulWidget {
-  static const double size = 112;
-  final FloodZone zone;
-  final VoidCallback onTap;
-  const _DepthPin({required this.zone, required this.onTap});
-
-  @override
-  State<_DepthPin> createState() => _DepthPinState();
-}
-
-class _DepthPinState extends State<_DepthPin>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1800),
-  );
-
-  bool get _pulse => widget.zone.risk == RiskLevel.high;
-
-  @override
-  void initState() {
-    super.initState();
-    if (_pulse) _ctrl.repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final z = widget.zone;
-    final color = z.risk.color;
-    final dry = FloodLevel.of(z.depthCm) == FloodLevel.dry;
-    const half = _DepthPin.size / 2;
-    return Semantics(
-      button: true,
-      label: 'Brgy. ${z.barangay}, ${formatCm(z.depthCm)}',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // The ping ring, flattened like a shadow on the ground.
-              if (_pulse)
-                AnimatedBuilder(
-                  animation: _ctrl,
-                  builder: (context, _) => Container(
-                    width: 10 + 40 * _ctrl.value,
-                    height: (10 + 40 * _ctrl.value) * 0.45,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(40),
-                      color: color.withValues(alpha: 0.45 * (1 - _ctrl.value)),
-                    ),
-                  ),
-                ),
-              Positioned(
-                bottom: half,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(6),
-                        boxShadow: const [
-                          BoxShadow(color: Color(0x40000000), blurRadius: 4),
-                        ],
-                      ),
-                      child: Text(
-                        dry ? 'Dry' : formatCm(z.depthCm),
-                        style: TextStyle(
-                          color: Color.lerp(color, Colors.black, 0.35),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    CustomPaint(
-                      size: const Size(28, 36),
-                      painter: _PinShape(color),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The map-pin shape: a round head that narrows to a point at the bottom,
-/// with a white dot in the head, a white outline, and a soft shadow.
-class _PinShape extends CustomPainter {
+/// The compass needle: red half points north, gray half south.
+class _CompassPainter extends CustomPainter {
   final Color color;
-  _PinShape(this.color);
+  _CompassPainter(this.color);
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final r = w / 2;
-    final head = Offset(r, r);
-    // Start at the tip, curve up the left side, go over the top of the
-    // round head, and curve back down the right side to the tip.
-    final path = Path()
-      ..moveTo(r, h)
-      ..cubicTo(r - r * 0.3, h - r * 0.9, 0, r + r * 0.8, 0, r)
-      ..arcTo(Rect.fromCircle(center: head, radius: r), math.pi, math.pi, false)
-      ..cubicTo(w, r + r * 0.8, r + r * 0.3, h - r * 0.9, r, h)
+  void paint(Canvas canvas, Size s) {
+    final c = s.center(Offset.zero);
+    final r = s.width / 2;
+    final north = Path()
+      ..moveTo(c.dx, c.dy - r)
+      ..lineTo(c.dx + r * 0.3, c.dy)
+      ..lineTo(c.dx - r * 0.3, c.dy)
       ..close();
-    canvas.drawShadow(path, Colors.black, 3, false);
-    canvas.drawPath(path, Paint()..color = color);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    canvas.drawCircle(head, r * 0.36, Paint()..color = Colors.white);
+    final south = Path()
+      ..moveTo(c.dx, c.dy + r)
+      ..lineTo(c.dx + r * 0.3, c.dy)
+      ..lineTo(c.dx - r * 0.3, c.dy)
+      ..close();
+    canvas.drawPath(north, Paint()..color = kDanger);
+    canvas.drawPath(south, Paint()..color = color.withValues(alpha: 0.35));
   }
 
   @override
-  bool shouldRepaint(_PinShape old) => old.color != color;
+  bool shouldRepaint(_CompassPainter old) => old.color != color;
 }
 
 /// "Sample photo" label and photo credit, on a dark fade so it stays
@@ -1173,7 +1234,7 @@ class _ZonePhoto extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [kOceanBlue, kMidnightBlue],
+                  colors: [kGraphite, kInk],
                 ),
               ),
               child: Stack(
@@ -1198,7 +1259,7 @@ class _ZonePhoto extends StatelessWidget {
                     child: Row(
                       children: [
                         Icon(
-                          Icons.photo_camera_outlined,
+                          CupertinoIcons.camera,
                           size: 14,
                           color: Colors.white.withValues(alpha: 0.7),
                         ),
@@ -1252,7 +1313,7 @@ class _PinDates extends StatelessWidget {
         children: [
           _line(
             c,
-            Icons.photo_camera_outlined,
+            CupertinoIcons.camera,
             'Photo taken ${formatDate(taken)}, ${formatTime(taken)} '
             '(${timeAgo(zone.photoAge)})',
             c.textPrimary,
@@ -1260,7 +1321,7 @@ class _PinDates extends StatelessWidget {
           const SizedBox(height: 6),
           _line(
             c,
-            Icons.auto_delete_outlined,
+            CupertinoIcons.hourglass,
             'Pin will be removed in $leftText',
             ending ? kCaution : c.textSecondary,
           ),

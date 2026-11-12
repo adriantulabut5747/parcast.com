@@ -38,6 +38,8 @@ dependencies:
   latlong2: ^0.10.1
   url_launcher: ^6.3.2
   image_picker: ^1.2.3
+  cupertino_icons: ^2.0.0
+  web: ^1.1.2
 
 dev_dependencies:
   flutter_test:
@@ -65,15 +67,20 @@ flutter:
     - assets/images/
 
   fonts:
-    - family: PlusJakartaSans
+    - family: Inter
       fonts:
-        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
-        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+        - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
-        - asset: assets/fonts/PlusJakartaSans-ExtraBold.ttf
+        - asset: assets/fonts/Inter-ExtraBold.ttf
           weight: 800
+    # Our own flood icons (flood, waves, lifebuoy, boat, landslide), made
+    # by tools/make_icons.py. Everything else is CupertinoIcons.
+    - family: AgosIcons
+      fonts:
+        - asset: assets/fonts/AgosIcons.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

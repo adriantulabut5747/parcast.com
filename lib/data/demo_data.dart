@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:latlong2/latlong.dart';
 
 import '../theme.dart';
+import '../widgets/agos_icons.dart';
 
 /// ============================================================
 /// DEMO DATA — all made-up numbers live here, so a real data
@@ -10,6 +12,16 @@ import '../theme.dart';
 /// ============================================================
 
 const LatLng kMabalacatCenter = LatLng(15.2236, 120.5717); // Poblacion
+
+/// The box the map can't be dragged out of: Mabalacat City plus a little
+/// margin. Same numbers as CITY in tools/make_map.py (the map data is only
+/// downloaded for this area).
+const kCityBounds = (
+  south: 15.130,
+  west: 120.490,
+  north: 15.300,
+  east: 120.670,
+);
 
 const List<String> kBarangays = [
   'Atlu-Bola',
@@ -322,7 +334,7 @@ const List<EvacuationCenter> kEvacCenters = [
     186,
     true,
     2.1,
-    Icons.stadium_rounded,
+    CupertinoIcons.sportscourt_fill,
     'assets/images/evac_sports_complex.jpg',
   ),
   EvacuationCenter(
@@ -333,7 +345,7 @@ const List<EvacuationCenter> kEvacCenters = [
     92,
     true,
     3.0,
-    Icons.account_balance_rounded,
+    CupertinoIcons.building_2_fill,
     'assets/images/evac_city_hall.jpg',
   ),
   EvacuationCenter(
@@ -344,7 +356,7 @@ const List<EvacuationCenter> kEvacCenters = [
     241,
     true,
     1.4,
-    Icons.school_rounded,
+    CupertinoIcons.book_fill,
     'assets/images/evac_dau_school.jpg',
   ),
   EvacuationCenter(
@@ -355,16 +367,16 @@ const List<EvacuationCenter> kEvacCenters = [
     0,
     false,
     3.6,
-    Icons.home_work_rounded,
+    CupertinoIcons.house_alt_fill,
     'assets/images/evac_dolores_court.jpg',
   ),
 ];
 
 enum AlertCategory {
-  flood('Flood', Icons.flood_rounded),
-  weather('Weather', Icons.thunderstorm_rounded),
-  road('Road', Icons.traffic_rounded),
-  shelter('Shelter', Icons.night_shelter_rounded);
+  flood('Flood', AgosIcons.flood),
+  weather('Weather', CupertinoIcons.cloud_bolt_rain_fill),
+  road('Road', CupertinoIcons.car_fill),
+  shelter('Shelter', CupertinoIcons.house_alt_fill);
 
   final String label;
   final IconData icon;
@@ -518,27 +530,32 @@ const List<Hotline> kHotlines = [
   Hotline(
     'National Emergency Hotline',
     '911',
-    Icons.phone_in_talk_rounded,
+    CupertinoIcons.phone_fill,
     kDanger,
   ),
-  Hotline('Mabalacat CDRRMO', '0998-999-4357', Icons.shield_rounded, kSkyBlue),
+  Hotline(
+    'Mabalacat CDRRMO',
+    '0998-999-4357',
+    CupertinoIcons.shield_fill,
+    kGray,
+  ),
   Hotline(
     'Bureau of Fire Protection',
     '0933-990-9960',
-    Icons.local_fire_department_rounded,
-    Color(0xFFF97316),
+    CupertinoIcons.flame_fill,
+    kGray,
   ),
   Hotline(
     'Mabalacat Police (PNP)',
     '0998-598-5458',
-    Icons.local_police_rounded,
-    Color(0xFF6366F1),
+    CupertinoIcons.shield_fill,
+    kGray,
   ),
   Hotline(
     'Mabalacat City Hall',
     '(045) 649-8620',
-    Icons.account_balance_rounded,
-    Color(0xFF14B8A6),
+    CupertinoIcons.building_2_fill,
+    kGray,
   ),
 ];
 
@@ -552,25 +569,25 @@ class SafetyTip {
 
 const List<SafetyTip> kSafetyTips = [
   SafetyTip(
-    Icons.terrain_rounded,
+    AgosIcons.landslide,
     'Go to higher ground',
     'Move early, before the water rises. Don\'t wait for it to reach your door.',
-    kSkyBlue,
+    kBlue,
   ),
   SafetyTip(
-    Icons.power_off_rounded,
+    CupertinoIcons.bolt_slash_fill,
     'Switch off the power',
     'Turn off the main breaker if water may enter your home.',
     kCaution,
   ),
   SafetyTip(
-    Icons.do_not_step_rounded,
+    CupertinoIcons.nosign,
     'Don\'t walk in floodwater',
     'It can hide open drains, sharp debris, strong currents, and live wires.',
     kDanger,
   ),
   SafetyTip(
-    Icons.backpack_rounded,
+    CupertinoIcons.bag_fill,
     'Keep a go-bag ready',
     'Water, food, flashlight, medicines, IDs, and a power bank.',
     kSafe,

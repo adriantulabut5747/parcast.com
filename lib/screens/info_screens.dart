@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/links.dart';
+import '../widgets/agos_icons.dart';
 
 /// ============================================================
 /// ABOUT and HELP screens
@@ -16,22 +18,22 @@ class AboutScreen extends StatelessWidget {
     final c = AppColors(context);
     const features = [
       (
-        Icons.cloud_rounded,
+        CupertinoIcons.cloud_fill,
         'Live weather',
         'Real-time conditions and forecast for Mabalacat City.',
       ),
       (
-        Icons.flood_rounded,
+        AgosIcons.flood,
         'Flood outlook',
         'A daily flood risk estimate from the rain forecast.',
       ),
       (
-        Icons.map_rounded,
+        CupertinoIcons.map_fill,
         'Flood map',
         'Flood zones and evacuation centers on an interactive map.',
       ),
       (
-        Icons.support_rounded,
+        AgosIcons.lifebuoyFill,
         'Emergency help',
         'SOS, rescue requests, and one-tap hotlines.',
       ),
@@ -56,10 +58,10 @@ class AboutScreen extends StatelessWidget {
                     height: 96,
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: kBrandGradient,
+                      color: kGraphite,
                     ),
                     child: const Icon(
-                      Icons.waves_rounded,
+                      AgosIcons.waves,
                       color: Colors.white,
                       size: 44,
                     ),
@@ -92,8 +94,8 @@ class AboutScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const IconBadge(
-                      Icons.science_rounded,
-                      kLogoYellow,
+                      CupertinoIcons.lab_flask_solid,
+                      kBlue,
                       size: 36,
                     ),
                     const SizedBox(width: 12),
@@ -167,7 +169,12 @@ class AboutScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _source(c, 'Weather', 'Open-Meteo (open-meteo.com)'),
-                    _source(c, 'Map', 'Esri, HERE, Garmin, © OpenStreetMap'),
+                    _source(
+                      c,
+                      'Map',
+                      '© OpenStreetMap contributors, via Protomaps · Terrain: '
+                          'Mapzen / AWS Terrain Tiles · MapLibre',
+                    ),
                     _source(
                       c,
                       'Flood reports, alerts, centers',
@@ -289,13 +296,17 @@ class HelpScreen extends StatelessWidget {
               AppCard(
                 gradient: LinearGradient(
                   colors: [
-                    kSkyBlue.withValues(alpha: c.isDark ? 0.3 : 0.12),
+                    kBlue.withValues(alpha: c.isDark ? 0.3 : 0.12),
                     c.surface,
                   ],
                 ),
                 child: Row(
                   children: [
-                    IconBadge(Icons.support_agent_rounded, c.accent, size: 48),
+                    IconBadge(
+                      CupertinoIcons.phone_circle_fill,
+                      c.accent,
+                      size: 48,
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -324,7 +335,7 @@ class HelpScreen extends StatelessWidget {
                         context,
                         name: kHotlines[1].name,
                         number: kHotlines[1].number,
-                        color: kSkyBlue,
+                        color: kBlue,
                       ),
                       child: const Text('Call'),
                     ),

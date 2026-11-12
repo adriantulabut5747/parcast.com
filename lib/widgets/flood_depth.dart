@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/services.dart';
 
 import 'dart:math' as math;
@@ -449,11 +450,7 @@ class DepthReadout extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.directions_car_filled_rounded,
-              size: 16,
-              color: c.textSecondary,
-            ),
+            Icon(CupertinoIcons.car_fill, size: 16, color: c.textSecondary),
             const SizedBox(width: 7),
             Expanded(
               child: Text(

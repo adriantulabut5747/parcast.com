@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
 import '../theme.dart';
@@ -7,6 +8,7 @@ import '../widgets/responsive.dart';
 import '../widgets/links.dart';
 import 'evacuation_centers_screen.dart';
 import 'deferred_screens.dart';
+import '../widgets/agos_icons.dart';
 
 /// ============================================================
 /// ASSISTANCE TAB — SOS, quick help, hotlines, go-bag checklist
@@ -96,33 +98,33 @@ class _AssistanceTabState extends State<AssistanceTab> {
   Widget _quickHelp(BuildContext context, AppColors c) {
     final items = [
       (
-        Icons.sailing_rounded,
+        AgosIcons.boat,
         'Request rescue',
         'Send your location',
         kDanger,
         () => _rescueSheet(context),
       ),
       (
-        Icons.night_shelter_rounded,
+        CupertinoIcons.house_alt_fill,
         'Evacuation',
         'Find open centers',
-        kSafe,
+        kGray,
         () =>
             Navigator.of(context)
                 .push(slideRoute(const EvacuationCentersScreen())),
       ),
       (
-        Icons.campaign_rounded,
+        CupertinoIcons.exclamationmark_bubble_fill,
         'Report incident',
         'Flooding, blocked roads',
-        const Color(0xFFF97316),
+        kGray,
         () => openReportIncident(context),
       ),
       (
-        Icons.person_search_rounded,
+        CupertinoIcons.person_crop_circle_badge_exclam,
         'Missing person',
         'Report someone missing',
-        const Color(0xFF8B5CF6),
+        kGray,
         () => _missingSheet(context),
       ),
     ];
@@ -180,7 +182,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: c.textSecondary),
+            Icon(CupertinoIcons.chevron_right, color: c.textSecondary),
           ],
         ),
       ),
@@ -247,7 +249,11 @@ class _AssistanceTabState extends State<AssistanceTab> {
                 color: kSafe.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.call_rounded, color: kSafe, size: 19),
+              child: const Icon(
+                CupertinoIcons.phone_fill,
+                color: kSafe,
+                size: 19,
+              ),
             ),
           ],
         ),
@@ -437,9 +443,9 @@ class _AssistanceTabState extends State<AssistanceTab> {
                 ),
               ),
             const SizedBox(height: 6),
-            GradientButton(
+            PrimaryButton(
               label: 'Request rescue instead',
-              icon: Icons.sailing_rounded,
+              icon: AgosIcons.boat,
               onPressed: () {
                 Navigator.of(sheet).pop();
                 _rescueSheet(context);
@@ -467,7 +473,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
                 Row(
                   children: [
                     const IconBadge(
-                      Icons.sailing_rounded,
+                      AgosIcons.boat,
                       kDanger,
                       size: 48,
                       squircle: true,
@@ -509,7 +515,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
                   children: [
                     _stepButton(
                       c,
-                      Icons.remove_rounded,
+                      CupertinoIcons.minus,
                       people > 1 ? () => setSheet(() => people--) : null,
                     ),
                     SizedBox(
@@ -526,7 +532,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
                     ),
                     _stepButton(
                       c,
-                      Icons.add_rounded,
+                      CupertinoIcons.plus,
                       people < 50 ? () => setSheet(() => people++) : null,
                     ),
                   ],
@@ -563,12 +569,10 @@ class _AssistanceTabState extends State<AssistanceTab> {
                   maxLines: 2,
                 ),
                 const SizedBox(height: 22),
-                GradientButton(
+                PrimaryButton(
                   label: 'Send rescue request',
-                  icon: Icons.send_rounded,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFDC2626), Color(0xFFF97316)],
-                  ),
+                  icon: CupertinoIcons.paperplane_fill,
+                  color: kDanger,
                   onPressed: () {
                     Navigator.of(sheet).pop();
                     showSuccessDialog(
@@ -615,13 +619,13 @@ class _AssistanceTabState extends State<AssistanceTab> {
                 const FieldLabel('Full name'),
                 const AppTextField(
                   hint: 'Juan Dela Cruz',
-                  icon: Icons.person_outline,
+                  icon: CupertinoIcons.person,
                 ),
                 const SizedBox(height: 14),
                 const FieldLabel('Age'),
                 const AppTextField(
                   hint: 'e.g. 12',
-                  icon: Icons.cake_outlined,
+                  icon: CupertinoIcons.calendar,
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 14),
@@ -637,12 +641,9 @@ class _AssistanceTabState extends State<AssistanceTab> {
                   maxLines: 3,
                 ),
                 const SizedBox(height: 22),
-                GradientButton(
+                PrimaryButton(
                   label: 'Submit report',
-                  icon: Icons.send_rounded,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF8B5CF6), Color(0xFFA78BFA)],
-                  ),
+                  icon: CupertinoIcons.paperplane_fill,
                   onPressed: () {
                     Navigator.of(sheet).pop();
                     showSuccessDialog(

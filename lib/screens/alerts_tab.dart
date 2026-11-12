@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
 import '../theme.dart';
@@ -163,7 +164,11 @@ class _AlertsTabState extends State<AlertsTab> {
           : TextButton.icon(
               onPressed: () =>
                   readAlerts.value = kAlerts.map((a) => a.id).toSet(),
-              icon: Icon(Icons.done_all_rounded, size: 18, color: c.accent),
+              icon: Icon(
+                CupertinoIcons.checkmark_alt_circle,
+                size: 18,
+                color: c.accent,
+              ),
               label: Text(
                 'Mark all read',
                 style: TextStyle(color: c.accent, fontWeight: FontWeight.w700),
@@ -209,7 +214,11 @@ class _AlertsTabState extends State<AlertsTab> {
       padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: kDanger, size: 24),
+          const Icon(
+            CupertinoIcons.exclamationmark_triangle,
+            color: kDanger,
+            size: 24,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -233,7 +242,7 @@ class _AlertsTabState extends State<AlertsTab> {
               ],
             ),
           ),
-          Icon(Icons.chevron_right_rounded, color: c.textSecondary),
+          Icon(CupertinoIcons.chevron_right, color: c.textSecondary),
         ],
       ),
     );
@@ -280,7 +289,7 @@ class _AlertsTabState extends State<AlertsTab> {
     return Material(
       // The alert being read (desktop) gets a soft blue background.
       color: selected
-          ? kSkyBlue.withValues(alpha: c.isDark ? 0.14 : 0.08)
+          ? kBlue.withValues(alpha: c.isDark ? 0.14 : 0.08)
           : Colors.transparent,
       child: InkWell(
         onTap: () {
@@ -317,7 +326,7 @@ class _AlertsTabState extends State<AlertsTab> {
                       height: 8,
                       margin: const EdgeInsets.only(left: 8),
                       decoration: const BoxDecoration(
-                        color: kSkyBlue,
+                        color: kBlue,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -380,11 +389,7 @@ class _AlertsTabState extends State<AlertsTab> {
       padding: const EdgeInsets.symmetric(vertical: 60),
       child: Column(
         children: [
-          IconBadge(
-            Icons.notifications_off_outlined,
-            c.textSecondary,
-            size: 72,
-          ),
+          IconBadge(CupertinoIcons.bell_slash, c.textSecondary, size: 72),
           const SizedBox(height: 14),
           Text(
             'No alerts here',
@@ -476,9 +481,9 @@ class _AlertDetails extends StatelessWidget {
           spacing: 16,
           runSpacing: 6,
           children: [
-            _meta(c, Icons.place_outlined, a.area),
-            _meta(c, Icons.schedule_rounded, timeAgo(a.ago)),
-            _meta(c, Icons.verified_outlined, a.source),
+            _meta(c, CupertinoIcons.placemark, a.area),
+            _meta(c, CupertinoIcons.clock, timeAgo(a.ago)),
+            _meta(c, CupertinoIcons.checkmark_seal, a.source),
           ],
         ),
         if (photo != null) ...[
@@ -538,9 +543,9 @@ class _AlertDetails extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 14),
-        GradientButton(
+        PrimaryButton(
           label: 'View on map',
-          icon: Icons.map_rounded,
+          icon: CupertinoIcons.map_fill,
           onPressed: onViewMap,
         ),
         if (onClose != null) ...[
