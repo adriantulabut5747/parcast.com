@@ -220,7 +220,10 @@ can mirror them.
 Every push to `main` publishes, via `.github/workflows/deploy-pages.yml`:
 - the landing page (`landing/`) at https://adriantulabut5747.github.io/AgosAlert/
 - the Flutter app at https://adriantulabut5747.github.io/AgosAlert/app/
-  (built with `--base-href /AgosAlert/app/`)
+  (built with `--base-href /<repo name>/app/`, filled in by the workflow)
+- The same code also goes to https://github.com/adriantulabut5747/parcast.com
+  (remote `parcast`: `git push parcast glass:main`), live at
+  https://adriantulabut5747.github.io/parcast.com/ once Pages is on there.
 
 So a broken push to `main` breaks the live site his groupmates
 screenshot — use a branch for risky changes.

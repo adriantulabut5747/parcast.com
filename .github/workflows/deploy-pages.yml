@@ -42,10 +42,11 @@ jobs:
       # Download the packages listed in pubspec.yaml (flutter_map, http...).
       - run: flutter pub get
 
-      # The app lives in /AgosAlert/app/ (the landing page takes the
+      # The app lives in /<repo name>/app/ (the landing page takes the
       # root), and base-href must say so, or the app looks for its files
-      # in the wrong folder.
-      - run: flutter build web --release --base-href /AgosAlert/app/
+      # in the wrong folder. The repo name is filled in by GitHub, so the
+      # same file works for AgosAlert and parcast.com.
+      - run: flutter build web --release --base-href /${{ github.event.repository.name }}/app/
 
       # Put the site together in _site/:
       #   _site/          the landing page (landing/ folder, plain HTML)
