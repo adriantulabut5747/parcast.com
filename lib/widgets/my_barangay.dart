@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../data/demo_data.dart';
+import '../services/auth.dart';
 import '../theme.dart';
 import 'common.dart';
 
@@ -9,7 +10,9 @@ import 'common.dart';
 /// MY BARANGAY — the user's own barangay ([myBarangay])
 /// ============================================================
 /// Picked once; Weather shows its latest report, Reports can filter to it,
-/// and the bell marks alerts for it.
+/// and the bell marks alerts for it. Logged in, it's saved on the user's
+/// row (sign-up already asked for it, so it can't be cleared); a guest's
+/// lives in memory only.
 
 /// Opens the picker: all 27 barangays as chips.
 Future<void> pickMyBarangay(BuildContext context) {
@@ -26,7 +29,8 @@ Future<void> pickMyBarangay(BuildContext context) {
               fontFamily: kDisplayFont,
               color: c.textPrimary,
               fontSize: 22,
-              fontWeight: FontWeight.w800,
+              letterSpacing: displayTracking(22),
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
@@ -44,21 +48,21 @@ Future<void> pickMyBarangay(BuildContext context) {
                   label: b,
                   selected: myBarangay.value == b,
                   onTap: () {
-                    myBarangay.value = b;
                     Navigator.of(sheet).pop();
+                    _setMyBarangay(context, b);
                   },
                 ),
             ],
           ),
-          if (myBarangay.value != null) ...[
+          if (isGuest && myBarangay.value != null) ...[
             const SizedBox(height: 14),
             Center(
-              child: TextButton(
+              child: TintedButton(
+                label: 'Clear',
                 onPressed: () {
                   myBarangay.value = null;
                   Navigator.of(sheet).pop();
                 },
-                child: Text('Clear', style: TextStyle(color: c.textSecondary)),
               ),
             ),
           ],
@@ -66,6 +70,23 @@ Future<void> pickMyBarangay(BuildContext context) {
       );
     },
   );
+}
+
+/// Shows the new barangay right away, then saves it; puts the old one back
+/// if saving fails.
+Future<void> _setMyBarangay(BuildContext context, String b) async {
+  final old = myBarangay.value;
+  myBarangay.value = b;
+  if (isGuest) return;
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await saveMyBarangay(b);
+  } catch (_) {
+    myBarangay.value = old;
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Couldn\'t save your barangay. Try again.')),
+    );
+  }
 }
 
 /// Small pill: "Brgy. Dau" (or "Set your barangay"). Tap to change it.

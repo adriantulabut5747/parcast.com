@@ -1,17 +1,21 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
-import '../data/demo_data.dart';
+import '../services/alerts.dart';
 import '../services/weather.dart';
 import '../theme.dart';
-import 'common.dart';
+import 'tugak_stage.dart';
 
 /// ============================================================
 /// TUGAK — the AgosAlert mascot ("tugak" = frog in Kapampangan)
 /// ============================================================
 ///
-/// A field toad in a rescue jacket. The pictures are made by
-/// `python tools/tugak.py` from tools/tugak.js (assets/images/tugak_*.png):
-/// edit the script, never the PNGs.
+/// A dark green toad in a black mafia fedora (Nov 13 2026 redesign:
+/// personality and a stare, so the app never reads as a kids' app). He's a
+/// 3D model built by tools/tugak3d.py in Blender: web/tugak/tugak.glb for
+/// the terrace scene on the Weather tab (tugak_stage.dart), and the still
+/// assets/images/tugak.png everywhere else. Edit the script, never those.
 ///
 /// His mood follows the real weather, and what he says is built from real
 /// numbers (the rain forecast, the latest alert). On a high alert he drops
@@ -33,9 +37,10 @@ TugakMood tugakMoodFor(MabalacatWeather w, {AppAlert? alert}) {
 /// (only when nothing is wrong) a short dry line.
 String tugakLine(MabalacatWeather w, {AppAlert? alert}) {
   if (alert != null) {
-    // The red strip above already names the alert: say what to do.
+    // Name the alert (the Weather tab has no red strip any more), then
+    // what to do.
     if (alert.actions.isEmpty) return '${alert.title}. Stay tuned here.';
-    return '${alert.actions.take(2).join('. ')}.';
+    return '${alert.title}. ${alert.actions.first}.';
   }
   final outlook = w.floodOutlook;
   if (outlook.level == RiskLevel.high) {
@@ -101,234 +106,359 @@ String tugakLineAt(HourlyForecast h, {required bool serious}) {
 /// Tips he cycles through when tapped (general advice, not data).
 const List<String> kTugakTips = [
   'Save the CDRRMO number now. During a flood is too late.',
-  'See a flooded street? One photo from the + button. That\'s all I need.',
+  'See a flooded street? Post one photo in Reports. That\'s all I need.',
   'Pack the go-bag before the rain does. The checklist is in Help.',
-  'Safe after a storm? Tap + and send "I\'m safe" so nobody has to guess.',
+  'Safe after a storm? Send "I\'m safe" from Help so nobody has to guess.',
 ];
 
-/// Tugak's picture. [hop] > 0 lifts him (the tap jump).
+/// Tugak's still picture (a render of the 3D model). [pose]: one of the
+/// landing page's poses that tugak3d.py --poses copies into
+/// assets/images/tugak/ (phone, think, handset, tip); null = him sitting.
 class TugakImage extends StatelessWidget {
-  final TugakMood mood;
   final double size;
-  const TugakImage({this.mood = TugakMood.fine, this.size = 120, super.key});
+  final String? pose;
+  const TugakImage({this.size = 120, this.pose, super.key});
 
   @override
   Widget build(BuildContext context) {
     return Image.asset(
-      'assets/images/tugak_${mood.name}.png',
+      pose == null
+          ? 'assets/images/tugak.png'
+          : 'assets/images/tugak/$pose.webp',
       width: size,
       height: size,
+      fit: BoxFit.contain,
       filterQuality: FilterQuality.medium,
       gaplessPlayback: true,
-      // Missing file (e.g. tugak.py not run yet): leave the space empty.
+      // Missing file (tugak3d.py not run yet): leave the space empty.
       errorBuilder: (_, _, _) => SizedBox(width: size, height: size),
       semanticLabel: 'Tugak, the AgosAlert toad',
     );
   }
 }
 
-/// Tugak with his speech bubble. Tap him: he hops and tells a tip (except
-/// on a high alert, when the instruction stays up).
-class TugakSays extends StatefulWidget {
-  final TugakMood mood;
-  final String line;
-  final double size;
-
-  /// Bubble to the left of Tugak (default) or above him.
-  final bool bubbleAbove;
-
-  /// If set: [beside] on the left, Tugak on the right, and the bubble
-  /// below both at full width, pointing up at him (the sky card).
-  final Widget? beside;
-  const TugakSays({
-    required this.mood,
-    required this.line,
-    this.size = 112,
-    this.bubbleAbove = false,
-    this.beside,
+/// Tugak's speech bubble, the landing page's `.say`: a blue TUGAK label
+/// ([name]: only the first bubble of a run has it), an optional bold
+/// [title], and a tail pointing at him: down (he's under it) by default,
+/// [tail] another way, or null for none (an earlier bubble in a chat run,
+/// like iMessage: only the last one gets the tail). Navy on the dark
+/// theme, white on the light one (Nov 14 2026, Adrian).
+class TugakSay extends StatelessWidget {
+  final String text;
+  final String? title;
+  final AxisDirection? tail;
+  final bool name;
+  const TugakSay(
+    this.text, {
+    this.title,
+    this.tail = AxisDirection.down,
+    this.name = true,
     super.key,
   });
 
   @override
-  State<TugakSays> createState() => _TugakSaysState();
-}
-
-class _TugakSaysState extends State<TugakSays>
-    with SingleTickerProviderStateMixin {
-  // -1 = say the weather line; 0, 1, 2... = which tip.
-  int _tip = -1;
-
-  // The hop: 0 -> 1 -> 0 over 450 ms (see _lift).
-  late final AnimationController _hop = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 450),
-  );
-
-  @override
-  void didUpdateWidget(TugakSays old) {
-    super.didUpdateWidget(old);
-    // New weather line (e.g. the time scrubber moved): drop the tip and
-    // say it. A new mood gets a hop, so the change is noticed.
-    if (old.line != widget.line) _tip = -1;
-    if (old.mood != widget.mood && !MediaQuery.disableAnimationsOf(context)) {
-      _hop.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _hop.dispose();
-    super.dispose();
-  }
-
-  void _tap() {
-    _hop.forward(from: 0);
-    if (widget.mood == TugakMood.storm) return; // serious: keep the order up
-    setState(() => _tip = (_tip + 1) % kTugakTips.length);
-  }
-
-  // A hop is a quick rise and fall: up 14 px at the middle (t = 0.5), back
-  // down at the end, a straight line each way.
-  double _lift(double t) => -14 * (t < 0.5 ? t * 2 : (1 - t) * 2);
-
-  @override
   Widget build(BuildContext context) {
-    final text = _tip < 0 ? widget.line : kTugakTips[_tip];
-    final beside = widget.beside;
-    final bubble = _Bubble(
-      text: text,
-      serious: widget.mood == TugakMood.storm,
-      tailRight: !widget.bubbleAbove && beside == null,
-      tailTopRight: beside != null,
-      fullWidth: beside != null,
-    );
-    final frog = Semantics(
-      button: true,
-      label: 'Tugak. Tap for a tip.',
-      child: PressableScale(
-        onTap: _tap,
-        child: AnimatedBuilder(
-          animation: _hop,
-          builder: (context, child) => Transform.translate(
-            offset: Offset(0, _lift(Curves.easeOut.transform(_hop.value))),
-            child: child,
-          ),
-          // Cross-fades between moods instead of blinking.
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            child: TugakImage(
-              key: ValueKey(widget.mood),
-              mood: widget.mood,
-              size: widget.size,
+    final c = AppColors(context);
+    final title = this.title;
+    final t = _SayPainter.tail;
+    return CustomPaint(
+      painter: _SayPainter(tail, dark: c.isDark),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16 + (tail == AxisDirection.left ? t : 0),
+          11 + (tail == AxisDirection.up ? t : 0),
+          16 + (tail == AxisDirection.right ? t : 0),
+          13 + (tail == AxisDirection.down ? t : 0),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (name) ...[
+              Text(
+                'TUGAK',
+                style: TextStyle(
+                  color: c.accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 3),
+            ],
+            if (title != null)
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: kDisplayFont,
+                  color: c.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: displayTracking(17),
+                ),
+              ),
+            Text(
+              text,
+              style: TextStyle(
+                color: title == null ? c.textPrimary : c.textSecondary,
+                fontSize: 15,
+                height: 1.4,
+                fontWeight: title == null ? FontWeight.w500 : FontWeight.w400,
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
-    if (beside != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(child: beside),
-              frog,
-            ],
-          ),
-          bubble,
-        ],
-      );
-    }
-    if (widget.bubbleAbove) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [bubble, frog],
-      );
-    }
+  }
+}
+
+/// Tugak in a [pose] with his bubbles to the right, like a chat: [line],
+/// then [more] lines as their own bubbles, the last one with the tail
+/// pointing at him. [footer] (e.g. a button) sits under the bubbles.
+/// Used atop quiet sections (Reports, Help & FAQ, Be ready).
+class TugakBeside extends StatelessWidget {
+  final String pose;
+  final String line;
+  final List<String> more;
+  final Widget? footer;
+  final double size;
+  const TugakBeside({
+    required this.pose,
+    required this.line,
+    this.more = const [],
+    this.footer,
+    this.size = 96,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = [line, ...more];
+    final footer = this.footer;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: widget.size * 0.35),
-            child: Align(alignment: Alignment.bottomRight, child: bubble),
+        TugakImage(size: size, pose: pose),
+        const SizedBox(width: 6),
+        Flexible(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < lines.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 6),
+                  TugakSay(
+                    lines[i],
+                    name: i == 0,
+                    tail: i == lines.length - 1 ? AxisDirection.left : null,
+                  ),
+                ],
+                if (footer != null) ...[
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.only(left: _SayPainter.tail),
+                    child: footer,
+                  ),
+                ],
+                // keeps his feet level with the last bubble's tail
+                if (footer == null) SizedBox(height: size * 0.12),
+              ],
+            ),
           ),
         ),
-        frog,
       ],
     );
   }
 }
 
-/// White speech bubble with a small "TUGAK" label. The text fades when it
-/// changes. [serious] (high alert) gets a red label instead of the brown.
-class _Bubble extends StatelessWidget {
-  final String text;
-  final bool serious;
-  final bool tailRight;
-  final bool tailTopRight;
-  final bool fullWidth;
-  const _Bubble({
-    required this.text,
-    required this.serious,
-    required this.tailRight,
-    this.tailTopRight = false,
-    this.fullWidth = false,
+class _SayPainter extends CustomPainter {
+  static const double tail = 7;
+  final AxisDirection? to; // which way the tail points (at him); null = none
+  final bool dark;
+  const _SayPainter(this.to, {required this.dark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const t = tail;
+    final w = size.width, h = size.height;
+    final body = switch (to) {
+      AxisDirection.left => Rect.fromLTRB(t, 0, w, h),
+      AxisDirection.right => Rect.fromLTRB(0, 0, w - t, h),
+      AxisDirection.up => Rect.fromLTRB(0, t, w, h),
+      AxisDirection.down => Rect.fromLTRB(0, 0, w, h - t),
+      null => Offset.zero & size,
+    };
+    // a triangle from just inside the body's edge out to the tip
+    final (a, tipAt, b) = switch (to) {
+      AxisDirection.left => (
+        Offset(t + 1, h / 2 - t),
+        Offset(0, h / 2),
+        Offset(t + 1, h / 2 + t),
+      ),
+      AxisDirection.right => (
+        Offset(w - t - 1, h / 2 - t),
+        Offset(w, h / 2),
+        Offset(w - t - 1, h / 2 + t),
+      ),
+      AxisDirection.up => (
+        Offset(w / 2 - t, t + 1),
+        Offset(w / 2, 0),
+        Offset(w / 2 + t, t + 1),
+      ),
+      AxisDirection.down => (
+        Offset(w / 2 - t, h - t - 1),
+        Offset(w / 2, h),
+        Offset(w / 2 + t, h - t - 1),
+      ),
+      // no tail: a zero-size triangle inside the body
+      null => (
+        Offset(w / 2, h / 2),
+        Offset(w / 2, h / 2),
+        Offset(w / 2, h / 2),
+      ),
+    };
+    final tip = Path()
+      ..moveTo(a.dx, a.dy)
+      ..lineTo(tipAt.dx, tipAt.dy)
+      ..lineTo(b.dx, b.dy)
+      ..close();
+    // one outline round bubble + tail, so the edge line runs along the tail too
+    final shape = Path.combine(
+      PathOperation.union,
+      Path()
+        ..addRRect(RRect.fromRectAndRadius(body, const Radius.circular(20))),
+      tip,
+    );
+    if (dark) {
+      canvas.drawShadow(shape, Colors.black, 8, false);
+    } else {
+      // a soft, low drop, like AppCard's on the light theme
+      canvas.drawPath(
+        shape.shift(const Offset(0, 4)),
+        Paint()
+          ..color = const Color(0x14000000)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+    }
+    // dark: the landing's .say (rgba(18,20,32,.78) over its night), opaque
+    // here; light: white with a hairline, like the app's cards
+    canvas.drawPath(
+      shape,
+      Paint()..color = dark ? const Color(0xFF12141F) : Colors.white,
+    );
+    canvas.drawPath(
+      shape,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = dark ? const Color(0x1FFFFFFF) : const Color(0x14000000),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SayPainter old) => old.to != to || old.dark != dark;
+}
+
+/// Tugak on the sky without 3D: what the terrace shows before its 3D
+/// frame is ready, where WebGL is missing, and outside the browser.
+/// [line] (if given) sits in a glass bubble at the top, or where
+/// [reserve] says (the same spots as the 3D scene).
+class TugakStill extends StatelessWidget {
+  final TugakWeather weather;
+  final String? line;
+  final bool showTugak;
+  final StageReserve? reserve;
+  const TugakStill({
+    required this.weather,
+    this.line,
+    this.showTugak = true,
+    this.reserve,
+    super.key,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(maxWidth: fullWidth ? double.infinity : 260),
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+    final line = this.line;
+    // The 3D scene's dark stage (STAGE in web/tugak/scene.js) with a soft
+    // pool of the sky behind him, so the switch to 3D doesn't jump.
+    const stage = Color(0xFF070A1C);
+    final sky = weatherGradient(weather.code, weather.isDay).first;
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        // The squared corner points at Tugak, like a speech-bubble tail.
-        borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(16),
-          topRight: Radius.circular(tailTopRight ? 4 : 16),
-          bottomLeft: const Radius.circular(16),
-          bottomRight: Radius.circular(tailRight ? 4 : 16),
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.3),
+          radius: 0.8,
+          colors: [Color.alphaBlend(sky.withValues(alpha: 0.5), stage), stage],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            serious ? 'TUGAK · ALERT' : 'TUGAK',
-            style: TextStyle(
-              color: serious ? kDanger : const Color(0xFF8C6C43),
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(height: 2),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: Text(
-              text,
-              key: ValueKey(text),
-              style: const TextStyle(
-                color: kInk,
-                fontSize: 12.5,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, box) => Stack(
+          children: [
+            if (reserve case final r?) ...[
+              if (showTugak)
+                Positioned(
+                  left: r.left,
+                  top: r.top,
+                  right: 0,
+                  bottom: r.bottom,
+                  child: LayoutBuilder(
+                    builder: (context, area) => Align(
+                      alignment: Alignment.bottomCenter,
+                      child: TugakImage(
+                        size: math.min(area.maxWidth, area.maxHeight) * 0.9,
+                      ),
+                    ),
+                  ),
+                ),
+              if (line != null)
+                r.below
+                    ? Positioned(
+                        left: 12,
+                        right: 12,
+                        bottom: 12,
+                        child: TugakSay(line, tail: AxisDirection.up),
+                      )
+                    : Positioned(
+                        left: 16,
+                        bottom: math.max(16, r.bottom),
+                        width: math.max(160, r.left - 30),
+                        child: TugakSay(line, tail: AxisDirection.right),
+                      ),
+            ] else ...[
+              if (showTugak)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: TugakImage(size: box.maxHeight * 0.72),
+                ),
+              if (line != null)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xC7121420),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0x1AFFFFFF)),
+                    ),
+                    child: Text(
+                      line,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }

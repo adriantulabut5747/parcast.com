@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 import 'package:agosalert/data/demo_data.dart';
 import 'package:agosalert/main.dart';
@@ -14,16 +15,20 @@ import 'package:agosalert/screens/assistance_tab.dart';
 import 'package:agosalert/screens/evacuation_centers_screen.dart';
 import 'package:agosalert/screens/home_shell.dart';
 import 'package:agosalert/screens/info_screens.dart';
+import 'package:agosalert/screens/login_screen.dart';
 import 'package:agosalert/screens/map_tab.dart';
 import 'package:agosalert/screens/reports_tab.dart';
 import 'package:agosalert/screens/report_incident_screen.dart';
 import 'package:agosalert/screens/settings_screen.dart';
 import 'package:agosalert/screens/weather_tab.dart';
+import 'package:agosalert/services/auth.dart';
+import 'package:agosalert/services/reports.dart';
 import 'package:agosalert/services/weather.dart';
 import 'package:agosalert/widgets/check_in.dart';
 import 'package:agosalert/theme.dart';
 import 'package:agosalert/widgets/agos_icons.dart';
 import 'package:agosalert/widgets/agos_map.dart';
+import 'package:agosalert/widgets/barangay_search.dart';
 import 'package:agosalert/widgets/common.dart';
 import 'package:agosalert/widgets/flood_depth.dart';
 import 'package:agosalert/widgets/skeleton.dart';
@@ -44,9 +49,54 @@ Future<void> pumpPhone(
   await tester.pump(const Duration(seconds: 1));
 }
 
+/// The logged-in user in tests (no Supabase here: `me` is set directly).
+const kTestUser = AppUser(
+  userId: 'test',
+  fullName: 'AC Parcore',
+  email: 'test@example.com',
+  barangay: 'Dau',
+);
+
+/// A flood report posted by someone else (no Supabase in tests: the
+/// list is set directly). Dau, 65 cm, photo taken 5 hours ago.
+FloodReport testReport({
+  Duration photoAge = const Duration(hours: 5),
+  int depthCm = 65,
+  String barangay = 'Dau',
+  String userId = 'someone-else',
+  int upVotes = 0,
+  int downVotes = 0,
+}) {
+  final taken = DateTime.now().subtract(photoAge);
+  return FloodReport(
+    reportId: 1,
+    userId: userId,
+    incidentType: 'flooding',
+    severity: 'high',
+    depthCm: depthCm,
+    barangay: barangay,
+    latitude: kBarangayPoints[barangay]!.latitude,
+    longitude: kBarangayPoints[barangay]!.longitude,
+    note: 'Low-lying streets near the creek are flooded above the knee.',
+    photoTakenAt: taken,
+    expiresAt: taken.add(kPinLifetime),
+    createdAt: taken,
+    posterName: 'Test Poster',
+    posterBarangay: 'Dau',
+    upVotes: upVotes,
+    downVotes: downVotes,
+  );
+}
+
 void main() {
-  // shared_preferences has no browser in tests: give it empty fake storage.
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    // shared_preferences has no browser in tests: give it empty fake storage.
+    SharedPreferences.setMockInitialValues({});
+    // Most tests use the app logged in; guest tests set `me = null`.
+    me = kTestUser;
+    floodReports.value = [testReport()];
+    reportsState.value = LoadState.ready;
+  });
 
   // Every step of the Before / During / After timeline fits on a phone
   // (During adds the water-depth diagram).
@@ -81,7 +131,84 @@ void main() {
     expect(find.text('1/9'), findsOneWidget);
   });
 
-  // Logging in happens on the landing page, so the app opens on Weather.
+  // Logged out (and no ?as=guest), the app opens on the login screen.
+  testWidgets('Logged out: app starts on Login', (tester) async {
+    me = null;
+    await tester.pumpWidget(const AgosAlertApp());
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byType(HomeShell), findsNothing);
+  });
+
+  // Both modes fit on a phone, and a missing field is caught before
+  // anything is sent to Supabase (there's no Supabase in tests).
+  testWidgets('Login screen: both modes render, empty form is caught', (
+    tester,
+  ) async {
+    me = null;
+    await pumpPhone(tester, const LoginScreen());
+    await tester.tap(find.text('Log in').last);
+    await tester.pump();
+    expect(
+      find.textContaining('Type your email first.'),
+      findsOneWidget,
+    ); // Tugak says it
+    await tester.pump(
+      const Duration(seconds: 1),
+    ); // his bubble grows and scrolls into view
+
+    final toSignUp = find.textContaining(
+      'Create an account',
+      findRichText: true,
+    );
+    await tester.ensureVisible(toSignUp);
+    await tester.pump();
+    await tester.tap(toSignUp);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Choose your barangay'), findsOneWidget);
+    await tester.tap(find.text('Create account').last);
+    await tester.pump();
+    expect(find.textContaining('I need your full name first.'), findsOneWidget);
+  });
+
+  // Tugak's login lines go by Supabase's error code; no connection = not an AuthException.
+  test('Login errors: Tugak names the problem', () {
+    String line(String code) => tugakAuthLine(AuthException('x', code: code));
+    expect(line('invalid_credentials'), startsWith('Wrong email or password.'));
+    expect(
+      line('email_exists'),
+      startsWith('That email already has an account.'),
+    );
+    expect(line('over_request_rate_limit'), startsWith('Too many tries'));
+    expect(
+      tugakAuthLine(
+        const AuthException(
+          'This account is suspended. Contact the AgosAlert admin.',
+          code: 'account_suspended',
+        ),
+      ),
+      'This account is suspended. Contact the AgosAlert admin.', // serious: no joke
+    );
+    expect(
+      tugakAuthLine(Exception('offline')),
+      contains('Check your connection'),
+    );
+  });
+
+  test('Avatar initials', () {
+    expect(kTestUser.initials, 'AP');
+    expect(
+      const AppUser(
+        userId: '',
+        fullName: 'tugak',
+        email: '',
+        barangay: '',
+      ).initials,
+      'T',
+    );
+  });
+
+  // Logged in, the app opens on Weather.
   testWidgets('App starts on Weather', (WidgetTester tester) async {
     await tester.pumpWidget(const AgosAlertApp());
     await tester.pump(const Duration(seconds: 1));
@@ -134,7 +261,7 @@ void main() {
   testWidgets('Desktop: the profile menu has Settings and Log out', (
     tester,
   ) async {
-    isGuest = false;
+    me = kTestUser;
     await pumpPhone(tester, const HomeShell(), size: const Size(1440, 900));
     await tester.tap(find.byTooltip('Account'));
     await tester.pump(const Duration(milliseconds: 500));
@@ -155,20 +282,21 @@ void main() {
     await tester.pump(); // rebuild: the fade starts here
     await tester.pump(const Duration(seconds: 1)); // let it finish
 
-    // The tab's fade is the nearest AnimatedOpacity above the text; read
-    // the value it is actually drawing (from its inner FadeTransition).
+    // Each tab sits in a _TabLayer; its Opacity is the first one inside it.
     double opacityOf(String text) {
-      final tabFade = find
-          .ancestor(of: find.text(text), matching: find.byType(AnimatedOpacity))
+      final layer = find
+          .ancestor(
+            of: find.text(text),
+            matching: find.byWidgetPredicate(
+              (w) => w.runtimeType.toString() == '_TabLayer',
+            ),
+          )
           .first;
       return tester
-          .widget<FadeTransition>(
-            find
-                .descendant(of: tabFade, matching: find.byType(FadeTransition))
-                .first,
+          .widget<Opacity>(
+            find.descendant(of: layer, matching: find.byType(Opacity)).first,
           )
-          .opacity
-          .value;
+          .opacity;
     }
 
     expect(opacityOf('Request rescue'), 0); // Help tab is hidden
@@ -205,12 +333,13 @@ void main() {
   });
 
   testWidgets('Tapping a flood pin shows its depth', (tester) async {
+    floodReports.value = [testReport(depthCm: 40, barangay: 'Tabun')];
     await pumpPhone(tester, const Scaffold(body: MapTab()));
-    // Pins are keyed by their id ('zone-' + barangay); the text '40 cm' is
-    // on both the pin and its card in the bottom panel.
+    // Pins are keyed by their id ('report-' + report_id); the text '40 cm'
+    // is on both the pin and its card in the bottom panel.
     await tester.tap(
       find.descendant(
-        of: find.byKey(const ValueKey('pin-zone-Tabun')),
+        of: find.byKey(const ValueKey('pin-report-1')),
         matching: find.byIcon(AgosIcons.flood),
       ),
     );
@@ -221,11 +350,11 @@ void main() {
     expect(find.text('Too deep for cars'), findsOneWidget);
   });
 
-  // Opens Dau's pin (42 up, 3 down) the way "View on map" on the Home
-  // feed does: by setting focusedZone.
+  // Opens Dau's pin the way "View on map" on the Reports feed does: by
+  // setting focusedReport.
   Future<void> openDau(WidgetTester tester) async {
     await pumpPhone(tester, const Scaffold(body: MapTab()));
-    focusedZone.value = kFloodZones.first;
+    focusedReport.value = floodReports.value.first;
     await tester.pump(const Duration(seconds: 1));
     // The first pump starts the sheet's slide-in; this one finishes it.
     await tester.pump(const Duration(seconds: 1));
@@ -239,29 +368,44 @@ void main() {
   }
 
   testWidgets('Logged-in user can vote once, switch, and undo', (tester) async {
-    isGuest = false;
+    me = kTestUser;
     myVotes.value = {};
+    final saved = <Vote?>[];
+    saveVote = (r, old, vote) async => saved.add(vote);
+    addTearDown(() => saveVote = (r, old, vote) async {});
     await openDau(tester);
     await tapThumb(tester, CupertinoIcons.hand_thumbsup_fill);
-    expect(find.text('43'), findsOneWidget);
-    // Switching moves the vote: up goes back to 42, down goes to 4.
+    expect(myVotes.value, {'1': Vote.up});
+    expect(find.text('1'), findsOneWidget);
+    // Switching moves the vote.
     await tapThumb(tester, CupertinoIcons.hand_thumbsdown_fill);
-    expect(find.text('42'), findsOneWidget);
-    expect(find.text('4'), findsOneWidget);
+    expect(myVotes.value, {'1': Vote.down});
+    expect(find.text('1'), findsOneWidget);
     // Tapping the same thumb again takes the vote back.
     await tapThumb(tester, CupertinoIcons.hand_thumbsdown_fill);
-    expect(find.text('3'), findsOneWidget);
+    expect(find.text('1'), findsNothing);
     expect(myVotes.value, isEmpty);
+    expect(saved, [Vote.up, Vote.down, null]);
+  });
+
+  testWidgets('A vote that fails to save is put back', (tester) async {
+    me = kTestUser;
+    myVotes.value = {};
+    saveVote = (r, old, vote) async => throw Exception('offline');
+    addTearDown(() => saveVote = (r, old, vote) async {});
+    await openDau(tester);
+    await tapThumb(tester, CupertinoIcons.hand_thumbsup_fill);
+    expect(myVotes.value, isEmpty);
+    expect(find.textContaining("wasn't saved"), findsOneWidget);
   });
 
   testWidgets('Guests get a login popup instead of voting', (tester) async {
-    isGuest = true;
+    me = null;
     myVotes.value = {};
-    addTearDown(() => isGuest = false);
+    addTearDown(() => me = kTestUser);
     await openDau(tester);
     await tapThumb(tester, CupertinoIcons.hand_thumbsup_fill);
     expect(find.text('Log in to vote'), findsOneWidget);
-    expect(find.text('42'), findsOneWidget);
     expect(myVotes.value, isEmpty);
   });
 
@@ -281,54 +425,108 @@ void main() {
     expect(find.text('Pin will be removed in 13 days'), findsOneWidget);
   });
 
-  test('Pins older than 14 days are hidden', () {
-    const old = FloodZone(
-      'Dau',
-      kMabalacatCenter,
-      RiskLevel.normal,
-      0,
-      '',
-      '',
-      photoAge: Duration(days: 15),
-    );
+  test('Reports older than 14 days are hidden', () {
+    final old = testReport(photoAge: const Duration(days: 15));
+    floodReports.value = [testReport(), old];
     expect(old.expired, isTrue);
-    expect(activeFloodZones.length, kFloodZones.length);
+    expect(activeFloodReports.length, 1);
   });
 
-  // The + in the Reports tab opens three actions; guests can't report.
-  testWidgets('The + button: actions, and guests get a login popup', (
+  testWidgets('Your own report shows a delete button, not the thumbs', (
     tester,
   ) async {
-    isGuest = true;
-    addTearDown(() => isGuest = false);
+    final r = testReport();
+    final mine = FloodReport(
+      reportId: 2,
+      userId: kTestUser.userId,
+      incidentType: 'landslide',
+      severity: 'moderate',
+      barangay: 'Dau',
+      latitude: r.latitude,
+      longitude: r.longitude,
+      photoTakenAt: r.photoTakenAt,
+      expiresAt: r.expiresAt,
+      createdAt: r.createdAt,
+      posterName: kTestUser.fullName,
+      posterBarangay: 'Dau',
+    );
+    await pumpPhone(tester, ReportPost(zone: mine));
+    expect(find.byIcon(CupertinoIcons.trash), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.hand_thumbsup_fill), findsNothing);
+    // No depth for a landslide: the type shows instead of "Dry".
+    expect(find.text('Landslide'), findsOneWidget);
+  });
+
+  // The + above the phone nav opens the form; guests get the login popup.
+  testWidgets('Report +: guests get a login popup', (tester) async {
+    me = null;
+    addTearDown(() => me = kTestUser);
     await pumpPhone(tester, const HomeShell());
     await tester.tap(find.byTooltip('Reports'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    await tester.tap(find.byTooltip('Report, I\'m safe, SOS'));
-    // Two pumps: the first starts the popup's opening, the second finishes
-    // it (it only takes taps once it's fully open).
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('I\'m safe'), findsOneWidget);
-    expect(find.text('SOS'), findsOneWidget);
-    await tester.tap(find.text('Report flood'));
+    await tester.tap(find.byTooltip('Report flooding'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Log in to report'), findsOneWidget);
   });
 
+  test('Reports search matches names, notes, barangays and types', () {
+    final r = testReport();
+    final name = r.posterName.split(' ').first.toLowerCase();
+    expect(reportMatches(r, name), isTrue);
+    expect(reportMatches(r, r.barangay.toUpperCase()), isTrue);
+    expect(reportMatches(r, r.typeLabel), isTrue);
+    expect(reportMatches(r, 'zzz-nothing'), isFalse);
+    expect(reportMatches(r, '  '), isTrue);
+  });
+
+  test('Barangay search: starts-with first, then contains', () {
+    expect(barangayMatches('san').take(2), ['San Francisco', 'San Joaquin']);
+    expect(barangayMatches('maria'), ['Santa Maria']);
+    expect(barangayMatches('Paris'), isEmpty);
+  });
+
+  // Submit is always tappable; with nothing filled in it points at the
+  // first missing part instead of sending.
+  testWidgets('Report: Submit with nothing filled shows what is missing', (
+    tester,
+  ) async {
+    await pumpPhone(tester, const ReportIncidentScreen());
+    await tester.scrollUntilVisible(
+      find.text('Submit report'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Submit report'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Choose what happened first.'), findsOneWidget);
+    expect(find.text('Set the spot: tap the map below.'), findsOneWidget);
+    // Picking a type clears that hint only.
+    await tester.tap(find.text('Flooding'));
+    await tester.pump();
+    expect(find.text('Choose what happened first.'), findsNothing);
+    expect(find.text('Set the spot: tap the map below.'), findsOneWidget);
+  });
+
   testWidgets('Phone avatar menu: votes received, but not for guests', (
     tester,
   ) async {
-    isGuest = false;
+    me = kTestUser;
+    // The counts are the database's, on the user's own reports only.
+    floodReports.value = [
+      testReport(userId: kTestUser.userId, upVotes: 7, downVotes: 2),
+      testReport(upVotes: 40),
+    ];
     await pumpPhone(tester, const HomeShell());
     await tester.tap(find.byTooltip('Account'));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('$kMyUpVotesReceived'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
     expect(find.text('Dark mode'), findsOneWidget);
-    isGuest = true;
-    addTearDown(() => isGuest = false);
+    me = null;
+    addTearDown(() => me = kTestUser);
     // A new key makes Flutter build the shell again with the new isGuest.
     await pumpPhone(tester, const HomeShell(key: ValueKey(1)));
     await tester.tap(find.byTooltip('Account'));
@@ -338,14 +536,14 @@ void main() {
   });
 
   test('"I\'m safe" message names the user and their barangay', () {
-    isGuest = false;
+    me = kTestUser;
     myBarangay.value = 'Dau';
     addTearDown(() => myBarangay.value = null);
     final m = imSafeMessage(DateTime(2026, 11, 12, 15, 40));
     expect(
       m,
       startsWith(
-        'I\'m safe. — $kDemoUserName, Brgy. Dau · Thu, Nov 12, 3:40 PM',
+        'I\'m safe. — ${kTestUser.fullName}, Brgy. Dau · Thu, Nov 12, 3:40 PM',
       ),
     );
   });
@@ -353,12 +551,12 @@ void main() {
   testWidgets('Reports: "Still flooded?" saves only your answer, and undo', (
     tester,
   ) async {
-    isGuest = false;
+    me = kTestUser;
     stillFlooded.value = {};
-    await pumpPhone(tester, ReportPost(zone: kFloodZones.first));
+    await pumpPhone(tester, ReportPost(zone: testReport()));
     await tester.tap(find.text('Yes'));
     await tester.pump();
-    expect(stillFlooded.value, {'Dau': true});
+    expect(stillFlooded.value, {'1': true});
     expect(find.textContaining('still flooded'), findsOneWidget);
     await tester.tap(find.text('Undo'));
     await tester.pump();
@@ -412,49 +610,39 @@ void main() {
     });
   }
 
-  // The Weather tab with real weather (the saved fixture): the sky card
-  // scrubs to a forecast hour and back, and the city map's panel sets
-  // "my barangay". Phone first, then the same page at desktop size.
-  testWidgets('Weather: scrub the next 24 hours, pick a barangay', (
-    tester,
-  ) async {
-    final json = File('test/fixtures/weather.json').readAsStringSync();
+  // The Weather tab with real weather and air quality (the saved
+  // fixtures): the live card shows the weather now, and a conditions tile
+  // flips to its explanation. Phone first, then the same page at desktop
+  // size (the room beside the live card).
+  testWidgets('Weather: live card, a tile flips', (tester) async {
+    final weather = File('test/fixtures/weather.json').readAsStringSync();
+    final air = File('test/fixtures/air_quality.json').readAsStringSync();
     final client = MockClient(
-      (_) async => http.Response(
-        json,
+      (req) async => http.Response(
+        req.url.host.startsWith('air-quality') ? air : weather,
         200,
         headers: {'content-type': 'application/json; charset=utf-8'},
       ),
     );
-    myBarangay.value = null;
-    addTearDown(() => myBarangay.value = null);
     await http.runWithClient(() async {
       MabalacatWeather.load(refresh: true);
+      AirQuality.load(refresh: true);
       await pumpPhone(tester, const Scaffold(body: WeatherTab()));
     }, () => client);
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('MABALACAT CITY · LIVE'), findsOneWidget);
-
-    final strip = find.byWidgetPredicate(
-      (w) =>
-          w is CustomPaint &&
-          w.painter.runtimeType.toString() == '_ScrubPainter',
+    expect(
+      find.text('MABALACAT CITY · LIVE', skipOffstage: false),
+      findsOneWidget,
     );
-    await tester.drag(strip, const Offset(120, 0));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.textContaining('FORECAST ·'), findsOneWidget);
-    await tester.tap(find.widgetWithText(PressableScale, 'Now'));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('MABALACAT CITY · LIVE'), findsOneWidget);
+    expect(find.text('Right now', skipOffstage: false), findsOneWidget);
 
-    // No barangay yet: the map selects the worst report and offers it.
-    await tester.scrollUntilVisible(find.text('Make it mine'), 300);
+    // Tap the UV tile: it flips to what the number means.
+    await tester.scrollUntilVisible(find.text('UV INDEX'), 300);
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('Make it mine'));
+    await tester.tap(find.text('UV INDEX'));
     await tester.pump();
-    expect(myBarangay.value, 'Dau');
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.textContaining('Sunburn strength'), findsOneWidget);
 
     await pumpPhone(
       tester,
@@ -468,6 +656,36 @@ void main() {
   // runner handles deferred code, not an app bug: it was the More tab in
   // "Switching tabs hides the previous tab").
   // (Reports, not Map: the Map tab starts real tile downloads.)
+  // Phones: swiping moves between neighbouring tabs; past the last tab it
+  // only rubber-bands. (From Help and Reports: the Map starts real tile
+  // downloads, so the test never swipes onto it.)
+  testWidgets('Swiping moves between tabs, not past the last one', (
+    tester,
+  ) async {
+    await pumpPhone(tester, const HomeShell(initialTab: 3));
+    await tester.pump(const Duration(seconds: 1));
+    bool showing(String text) =>
+        find.text(text).hitTestable().evaluate().isNotEmpty;
+    expect(showing('Request rescue'), isTrue); // on Help
+
+    // Flick left on the last tab: it gives a little, then springs back.
+    await tester.fling(
+      find.text('Request rescue'),
+      const Offset(-300, 0),
+      1500,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(showing('Request rescue'), isTrue);
+
+    // Flick right: Reports slides in from the left.
+    await tester.fling(find.text('Request rescue'), const Offset(300, 0), 1500);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(showing('Request rescue'), isFalse);
+    expect(showing('Tap the + down there to start.'), isTrue);
+  });
+
   testWidgets('HomeShell can open on another tab', (tester) async {
     await pumpPhone(tester, const HomeShell(initialTab: 2));
     await tester.pump(const Duration(seconds: 1));

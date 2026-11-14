@@ -25,4 +25,13 @@ abstract final class AgosIcons {
 
   /// Landslide: a slope breaking off into rocks.
   static const IconData landslide = IconData(0xe005, fontFamily: _font);
+
+  /// Map (outline): a pin over the ground, for the closed Map tab.
+  static const IconData mapPin = IconData(0xe006, fontFamily: _font);
+
+  /// Map (filled), for the open Map tab.
+  static const IconData mapPinFill = IconData(0xe007, fontFamily: _font);
+
+  /// Blocked road: a striped road barricade.
+  static const IconData roadBlock = IconData(0xe008, fontFamily: _font);
 }

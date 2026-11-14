@@ -4,14 +4,38 @@
     python tools/nav_icons.py --preview  -> also build/nav_icons_sheet.png
 
 Edit nav_icons.js and rerun this; never edit the PNGs by hand.
-Needs Google Chrome and Pillow, like tugak.py (whose screenshot helper this uses).
+Needs Google Chrome and Pillow.
 """
 
+import pathlib
+import subprocess
 import sys
+import tempfile
 
 from PIL import Image
 
-from tugak import ROOT, shoot
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+
+
+def shoot(html: str, out: pathlib.Path, width: int, height: int) -> None:
+    """Headless Chrome screenshot of [html] on a see-through background."""
+    with tempfile.TemporaryDirectory() as tmp:
+        page = pathlib.Path(tmp) / "page.html"
+        page.write_text(html, encoding="utf-8")
+        subprocess.run(
+            [
+                CHROME,
+                "--headless=new",
+                "--hide-scrollbars",
+                "--default-background-color=00000000",  # see-through PNG
+                f"--window-size={width},{height}",
+                f"--screenshot={out}",
+                page.as_uri(),
+            ],
+            check=True,
+            capture_output=True,
+        )
 
 NAMES = ["weather", "map", "reports", "help"]
 SIZE = 192  # px; shown at most ~60 px in the app, so this covers 3x screens

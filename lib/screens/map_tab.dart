@@ -7,8 +7,10 @@ import 'package:latlong2/latlong.dart' hide Path;
 
 import '../data/demo_data.dart';
 import '../services/weather.dart';
+import '../services/reports.dart';
 import '../theme.dart';
 import '../widgets/agos_icons.dart';
+import '../widgets/barangay_search.dart';
 import '../widgets/agos_map.dart';
 import '../widgets/common.dart';
 import '../widgets/flood_depth.dart';
@@ -50,72 +52,87 @@ class _MapTabState extends State<MapTab> {
   // The pin that's highlighted (bigger) on the map and in the lists.
   String? _selected;
 
-  // The report cards in the bottom panel: deepest water first.
-  late final List<FloodZone> _zones = activeFloodZones.toList()
-    ..sort((a, b) => b.depthCm.compareTo(a.depthCm));
+  // The report cards in the bottom panel: deepest water first. Rebuilt
+  // (with the pins and rings) whenever the reports change: [_refresh].
+  late List<FloodReport> _zones;
 
   // Zoom levels: each +1 doubles the detail. 13 shows the whole city,
   // 18 single streets and buildings.
   static const _startZoom = 13.3;
   static const _pinZoom = 15.5;
 
-  static String _zoneId(FloodZone z) => 'zone-${z.barangay}';
+  static String _zoneId(FloodReport z) => 'report-${z.reportId}';
   static String _centerId(EvacuationCenter e) => 'center-${e.name}';
 
-  late final List<MapPin> _pins = [
-    for (final z in _zones)
-      MapPin(
-        id: _zoneId(z),
-        kind: PinKind.flood,
-        point: z.point,
-        color: z.risk.color,
-        icon: AgosIcons.flood,
-        title: z.barangay,
-        chip: FloodLevel.of(z.depthCm) == FloodLevel.dry
-            ? 'Dry'
-            : formatCm(z.depthCm),
-        pulse: z.risk == RiskLevel.high,
-        a11y: 'Brgy. ${z.barangay}, ${formatCm(z.depthCm)}',
-      ),
-    for (final e in kEvacCenters)
-      MapPin(
-        id: _centerId(e),
-        kind: PinKind.shelter,
-        point: e.point,
-        color: e.open ? kSafe : kGray,
-        icon: e.icon,
-        title: e.name,
-        a11y: '${e.name}, evacuation center, ${e.open ? 'open' : 'standby'}',
-      ),
-  ];
+  late List<MapPin> _pins;
+  late List<MapZone> _rings;
 
-  // A see-through circle around each report (bigger for high risk).
-  late final List<MapZone> _rings = [
-    for (final z in _zones)
-      MapZone(z.point, z.risk == RiskLevel.high ? 650 : 480, z.risk.color),
-  ];
+  void _refresh() {
+    _zones = activeFloodReports.toList()
+      ..sort((a, b) => b.depth.compareTo(a.depth));
+    _pins = [
+      for (final z in _zones)
+        MapPin(
+          id: _zoneId(z),
+          kind: PinKind.flood,
+          point: z.point,
+          color: z.risk.color,
+          icon: z.typeIcon,
+          title: z.barangay,
+          chip: !z.hasDepth
+              ? z.typeLabel
+              : FloodLevel.of(z.depth) == FloodLevel.dry
+              ? 'Dry'
+              : formatCm(z.depth),
+          pulse: z.risk == RiskLevel.high,
+          a11y:
+              '${z.typeLabel} in Brgy. ${z.barangay}, ${z.hasDepth ? formatCm(z.depth) : z.typeLabel}',
+        ),
+      for (final e in kEvacCenters)
+        MapPin(
+          id: _centerId(e),
+          kind: PinKind.shelter,
+          point: e.point,
+          color: e.open ? kShelter : kGray,
+          icon: e.icon,
+          title: e.name,
+          a11y: '${e.name}, evacuation center, ${e.open ? 'open' : 'standby'}',
+        ),
+    ];
 
-  // "View on map" on the Home feed sets focusedZone and switches to this
+    // A see-through circle around each report (bigger for high risk).
+    _rings = [
+      for (final z in _zones)
+        MapZone(z.point, z.risk == RiskLevel.high ? 650 : 480, z.risk.color),
+    ];
+  }
+
+  void _onReports() => setState(_refresh);
+
+  // "View on map" on the Home feed sets focusedReport and switches to this
   // tab; we then fly to that pin and open it. Checked once at start too,
   // in case this tab was only just opened (and downloaded) for it.
   @override
   void initState() {
     super.initState();
-    focusedZone.addListener(_openFocused);
+    _refresh();
+    floodReports.addListener(_onReports);
+    focusedReport.addListener(_openFocused);
     WidgetsBinding.instance.addPostFrameCallback((_) => _openFocused());
   }
 
   @override
   void dispose() {
-    focusedZone.removeListener(_openFocused);
+    focusedReport.removeListener(_openFocused);
+    floodReports.removeListener(_onReports);
     _map.dispose();
     super.dispose();
   }
 
   void _openFocused() {
-    final z = focusedZone.value;
+    final z = focusedReport.value;
     if (z == null || !mounted) return;
-    focusedZone.value = null;
+    focusedReport.value = null;
     _showZone(context, z);
   }
 
@@ -132,6 +149,12 @@ class _MapTabState extends State<MapTab> {
   void _focus(String id, LatLng point) {
     setState(() => _selected = id);
     _map.flyTo(point, zoom: _pinZoom);
+  }
+
+  // The barangay search: fly to that barangay's center.
+  void _goToBarangay(String b) {
+    setState(() => _selected = null);
+    _map.flyTo(kBarangayPoints[b] ?? kMabalacatCenter, zoom: 15);
   }
 
   void _recenter() {
@@ -204,7 +227,16 @@ class _MapTabState extends State<MapTab> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _chipsAndLegend(c)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        BarangaySearch(onPick: _goToBarangay),
+                        const SizedBox(height: 8),
+                        _chipsAndLegend(c),
+                      ],
+                    ),
+                  ),
                   const SizedBox(width: 10),
                   _controls(c, zoomButtons: wide),
                 ],
@@ -218,12 +250,39 @@ class _MapTabState extends State<MapTab> {
                   : Duration.zero,
               curve: kSnappyCurve,
               left: 12,
-              right: wide ? null : 12,
+              // Phones: closed, it leaves room for the + on its right.
+              right: wide
+                  ? null
+                  : _sheetOpen
+                  ? 12
+                  : 12 + ReportFab.size + 8,
               width: wide ? 420 : null,
               bottom: bottom,
               height: height,
               child: _sheet(c, max: max, height: height),
             ),
+            // Phones: the + beside the closed sheet (hidden while it's open).
+            if (!wide)
+              Positioned(
+                right: 12,
+                bottom: bottom + (_peek - ReportFab.size) / 2,
+                child: IgnorePointer(
+                  ignoring: _sheetOpen,
+                  child: AnimatedScale(
+                    scale: _sheetOpen ? 0.6 : 1,
+                    duration: const Duration(milliseconds: 300),
+                    curve: kSnappyCurve,
+                    child: AnimatedOpacity(
+                      opacity: _sheetOpen ? 0 : 1,
+                      duration: const Duration(milliseconds: 200),
+                      child: const MapGlass(
+                        radius: ReportFab.size / 2,
+                        child: ReportFab(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },
@@ -243,21 +302,21 @@ class _MapTabState extends State<MapTab> {
             _layerChip(
               c,
               icon: AgosIcons.flood,
-              label: 'Reports ${_zones.length}',
+              label: 'Reports · ${_zones.length}',
               on: _showZones,
               onTap: () => setState(() => _showZones = !_showZones),
             ),
             _layerChip(
               c,
               icon: CupertinoIcons.house_alt_fill,
-              label: 'Shelters $open/${kEvacCenters.length}',
+              label: 'Shelters · $open/${kEvacCenters.length}',
               on: _showCenters,
               onTap: () => setState(() => _showCenters = !_showCenters),
             ),
             _layerChip(
               c,
               icon: CupertinoIcons.info_circle,
-              label: 'Depth',
+              label: 'Depth legend',
               on: _legendOpen,
               plain: true,
               onTap: () => setState(() => _legendOpen = !_legendOpen),
@@ -301,8 +360,11 @@ class _MapTabState extends State<MapTab> {
     required VoidCallback onTap,
     bool plain = false,
   }) {
-    final solid = on && !plain;
-    final fg = solid ? c.onInverse : c.textPrimary;
+    // On = the raised glass thumb look (brighter glass, full-strength
+    // text); off = plain glass with faded text. No solid white: over the
+    // dark map it glared.
+    final raised = on && !plain;
+    final fg = c.textPrimary;
     return Semantics(
       button: true,
       toggled: on,
@@ -311,31 +373,49 @@ class _MapTabState extends State<MapTab> {
         onTap: onTap,
         child: MapGlass(
           radius: 18,
-          blur: !solid,
+          blur: true,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            // The legend toggle is a round icon button, so the chip row
+            // always fits on one line next to the 3D / locate buttons.
+            width: plain ? 36 : null,
+            padding: EdgeInsets.symmetric(horizontal: plain ? 0 : 12),
             decoration: BoxDecoration(
-              color: solid
-                  ? c.inverse
+              color: raised
+                  ? (c.isDark
+                        ? Color.alphaBlend(
+                            Colors.white.withValues(alpha: 0.16),
+                            c.surface.withValues(alpha: 0.62),
+                          )
+                        : Colors.white.withValues(alpha: 0.95))
                   : c.surface.withValues(alpha: c.isDark ? 0.62 : 0.78),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: solid ? c.inverse : c.border),
+              border: Border.all(
+                color: raised
+                    ? Colors.white.withValues(alpha: c.isDark ? 0.18 : 0.6)
+                    : c.border,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 15, color: fg.withValues(alpha: on ? 1 : 0.5)),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: fg.withValues(alpha: on ? 1 : 0.55),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Icon(
+                  icon,
+                  size: plain ? 17 : 15,
+                  color: fg.withValues(alpha: on || plain ? 1 : 0.5),
                 ),
+                if (!plain) const SizedBox(width: 6),
+                if (!plain)
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: fg.withValues(alpha: on ? 1 : 0.55),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -390,7 +470,8 @@ class _MapTabState extends State<MapTab> {
                           fontFamily: kDisplayFont,
                           color: c.textPrimary,
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          letterSpacing: displayTracking(15),
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -449,10 +530,37 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
-  Widget _glass(AppColors c, {required Widget child, double radius = 22}) {
-    return MapGlass(
+  // [solid]: the desktop side panel. On the light theme the map's streets
+  // and labels showed through the glass and mixed with the list (Adrian,
+  // Nov 14 2026), so there it's an opaque white panel with a soft shadow.
+  Widget _glass(
+    AppColors c, {
+    required Widget child,
+    double radius = 22,
+    bool solid = false,
+  }) {
+    final panel = MapGlass(
       radius: radius,
-      child: GlassCard(radius: radius, padding: EdgeInsets.zero, child: child),
+      child: GlassCard(
+        radius: radius,
+        padding: EdgeInsets.zero,
+        opacity: solid && !c.isDark ? 1 : null,
+        child: child,
+      ),
+    );
+    if (!solid || c.isDark) return panel;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1F000000),
+            blurRadius: 30,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: panel,
     );
   }
 
@@ -486,7 +594,7 @@ class _MapTabState extends State<MapTab> {
                         is3d ? '2D' : '3D',
                         style: TextStyle(
                           color: c.textPrimary,
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.3,
                         ),
@@ -602,7 +710,7 @@ class _MapTabState extends State<MapTab> {
             maxLines: 1,
             style: TextStyle(
               color: c.textSecondary,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -616,9 +724,9 @@ class _MapTabState extends State<MapTab> {
           'STREET FLOOD DEPTH',
           style: TextStyle(
             color: c.textSecondary,
-            fontSize: 9.5,
+            fontSize: 11,
             fontWeight: FontWeight.w800,
-            letterSpacing: 1,
+            letterSpacing: 0.6,
           ),
         ),
         const SizedBox(height: 6),
@@ -689,6 +797,7 @@ class _MapTabState extends State<MapTab> {
     return _glass(
       c,
       radius: 24,
+      solid: true,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
         child: Column(
@@ -712,23 +821,25 @@ class _MapTabState extends State<MapTab> {
             const SizedBox(height: 4),
             Text(
               'Reports from residents · Mabalacat City',
-              style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+              style: TextStyle(color: c.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 14),
+            BarangaySearch(onPick: _goToBarangay, overMap: false),
+            const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 SelectChip(
-                  label: 'Flood zones · ${_zones.length}',
+                  label: 'Reports · ${_zones.length}',
                   icon: AgosIcons.flood,
                   selected: _showZones,
                   onTap: () => setState(() => _showZones = !_showZones),
                 ),
                 SelectChip(
-                  label: 'Evacuation · ${kEvacCenters.length}',
+                  label:
+                      'Shelters · ${kEvacCenters.where((e) => e.open).length}/${kEvacCenters.length}',
                   icon: CupertinoIcons.house_alt_fill,
-                  color: kSafe,
                   selected: _showCenters,
                   onTap: () => setState(() => _showCenters = !_showCenters),
                 ),
@@ -794,7 +905,7 @@ class _MapTabState extends State<MapTab> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: c.textPrimary,
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -819,7 +930,7 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
-  Widget _pinRow(AppColors c, FloodZone z) => _row(
+  Widget _pinRow(AppColors c, FloodReport z) => _row(
     c,
     id: _zoneId(z),
     onTap: () => _showZone(context, z),
@@ -827,22 +938,23 @@ class _MapTabState extends State<MapTab> {
       TextSpan(
         children: [
           TextSpan(
-            text: '${z.depthCm.round()}',
+            text: z.hasDepth ? '${z.depth.round()}' : '–',
             style: TextStyle(
-              color: z.risk.color,
-              fontSize: 18,
+              color: c.readable(z.risk.color),
+              fontSize: 17,
               fontWeight: FontWeight.w800,
             ),
           ),
           TextSpan(
-            text: ' cm',
+            text: z.hasDepth ? ' cm' : '',
             style: TextStyle(color: c.textSecondary, fontSize: 11),
           ),
         ],
       ),
     ),
     title: 'Brgy. ${z.barangay}',
-    subtitle: '${FloodLevel.of(z.depthCm).label} · ${z.updated}',
+    subtitle:
+        '${z.hasDepth ? FloodLevel.of(z.depth).label : z.typeLabel} · ${z.updated}',
   );
 
   Widget _centerRow(AppColors c, EvacuationCenter e) => _row(
@@ -853,14 +965,14 @@ class _MapTabState extends State<MapTab> {
       alignment: Alignment.centerLeft,
       child: IconBadge(
         e.icon,
-        e.open ? kSafe : kGray,
+        e.open ? kShelter : kGray,
         size: 34,
         squircle: true,
       ),
     ),
     title: e.name,
     subtitle: e.open
-        ? 'Open · ${e.occupants} of ${e.capacity} people'
+        ? 'Open · ${e.distanceKm} km away'
         : 'Standby · not open yet',
   );
 
@@ -868,7 +980,7 @@ class _MapTabState extends State<MapTab> {
   // Tapping a flood pin (or its card/row): fly the map to it, then slide
   // up a details sheet. `sheet` is the sheet's own context, used to close
   // it (Navigator.of(sheet).pop()) before opening Google Maps.
-  void _showZone(BuildContext context, FloodZone z) {
+  void _showZone(BuildContext context, FloodReport z) {
     final color = z.risk.color;
     _focus(_zoneId(z), z.point);
     showAppSheet(
@@ -899,11 +1011,8 @@ class _MapTabState extends State<MapTab> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Mabalacat City · Updated ${z.updated}',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12.5,
-                        ),
+                        '${z.typeLabel} · posted ${z.updated}',
+                        style: TextStyle(color: c.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
@@ -923,28 +1032,31 @@ class _MapTabState extends State<MapTab> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Divider(height: 1, color: c.border),
             ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                DepthGauge(depthCm: z.depthCm, color: color),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: DepthReadout(depthCm: z.depthCm),
+            if (z.hasDepth) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DepthGauge(depthCm: z.depth, color: color),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: DepthReadout(depthCm: z.depth),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Text(
-              z.note,
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 14,
-                height: 1.45,
+                ],
               ),
-            ),
+              const SizedBox(height: 18),
+            ],
+            if (z.note.isNotEmpty)
+              Text(
+                z.note,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 15,
+                  height: 1.45,
+                ),
+              ),
             const SizedBox(height: 12),
             // Guidance as a quote-style block: a thin colored bar on the
             // left instead of a filled box.
@@ -963,7 +1075,20 @@ class _MapTabState extends State<MapTab> {
               ),
             ),
             const SizedBox(height: 18),
-            VoteBar(zone: z),
+            if (z.mine)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'This is your report.',
+                      style: TextStyle(color: c.textSecondary, fontSize: 13),
+                    ),
+                  ),
+                  DeleteReportButton(report: z),
+                ],
+              )
+            else
+              VoteBar(zone: z),
             const SizedBox(height: 22),
             PrimaryButton(
               label: 'Directions',
@@ -985,7 +1110,7 @@ class _MapTabState extends State<MapTab> {
       context,
       builder: (sheet) {
         final c = AppColors(sheet);
-        final color = e.open ? kSafe : kGray;
+        final color = e.open ? kShelter : kGray;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1007,10 +1132,7 @@ class _MapTabState extends State<MapTab> {
                       ),
                       Text(
                         'Evacuation center · Brgy. ${e.barangay}',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12.5,
-                        ),
+                        style: TextStyle(color: c.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
@@ -1026,15 +1148,6 @@ class _MapTabState extends State<MapTab> {
                     'Status',
                     e.open ? 'Open' : 'Standby',
                     color,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _statBox(
-                    c,
-                    'Occupancy',
-                    '${e.occupants}/${e.capacity}',
-                    c.accent,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1128,128 +1241,92 @@ class _CompassPainter extends CustomPainter {
 
 /// "Sample photo" label and photo credit, on a dark fade so it stays
 /// readable on any photo.
-class _PhotoCredit extends StatelessWidget {
-  const _PhotoCredit();
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(12, 18, 12, 8),
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0x00000000), Color(0x99000000)],
-          ),
-        ),
-        child: const Text(
-          kFloodPhotoCredit,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The photo at the top of a flood pin's sheet. Until a real photo
-/// exists (see FloodZone.photo), shows a calm placeholder with water
-/// drawn at the same depth as the gauge, so it still says something.
+/// The photo at the top of a flood pin's sheet. Reports without one (the
+/// photo is optional) get a calm placeholder with water drawn at the
+/// same depth as the gauge, so it still says something.
 class _ZonePhoto extends StatelessWidget {
-  final FloodZone zone;
+  final FloodReport zone;
   const _ZonePhoto({required this.zone});
 
   @override
   Widget build(BuildContext context) {
     final color = zone.risk.color;
     // 0 cm -> no water, 180 cm -> water fills 70% of the placeholder.
-    final fill = (zone.depthCm / DepthGauge.maxCm).clamp(0.0, 1.0) * 0.7;
+    final fill = (zone.depth / DepthGauge.maxCm).clamp(0.0, 1.0) * 0.7;
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: Image.asset(
-          zone.photo,
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          // Once the photo has loaded (frame != null), lay the credit
-          // over its bottom edge. The license (CC BY-SA) requires it.
-          frameBuilder: (context, child, frame, _) => frame == null
-              ? child
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [child, const _PhotoCredit()],
-                ),
-          errorBuilder: (_, _, _) => LayoutBuilder(
-            builder: (context, box) => Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [kGraphite, kInk],
-                ),
+        child: zone.photoUrl == null
+            ? _placeholder(color, fill)
+            : Image.network(
+                zone.photoUrl!,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, _, _) => _placeholder(color, fill),
               ),
-              child: Stack(
-                children: [
-                  if (fill > 0)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: AnimatedWaves(
-                        height: math.max(24, box.maxHeight * fill),
-                        colors: [
-                          color.withValues(alpha: 0.25),
-                          color.withValues(alpha: 0.35),
-                          color.withValues(alpha: 0.5),
-                        ],
-                      ),
-                    ),
-                  Positioned(
-                    left: 14,
-                    top: 12,
-                    child: Row(
-                      children: [
-                        Icon(
-                          CupertinoIcons.camera,
-                          size: 14,
-                          color: Colors.white.withValues(alpha: 0.7),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'No photo yet',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
+
+  Widget _placeholder(Color color, double fill) => LayoutBuilder(
+    builder: (context, box) => Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [kGraphite, kInk],
+        ),
+      ),
+      child: Stack(
+        children: [
+          if (fill > 0)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedWaves(
+                height: math.max(24, box.maxHeight * fill),
+                colors: [
+                  color.withValues(alpha: 0.25),
+                  color.withValues(alpha: 0.35),
+                  color.withValues(alpha: 0.5),
+                ],
+              ),
+            ),
+          Positioned(
+            left: 14,
+            top: 12,
+            child: Row(
+              children: [
+                Icon(
+                  CupertinoIcons.camera,
+                  size: 14,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'No photo yet',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// When the pin's photo was taken, and when the pin will be removed
 /// (pins only last [kPinLifetime]), so people can tell if it's still
 /// happening or the photo is old.
 class _PinDates extends StatelessWidget {
-  final FloodZone zone;
+  final FloodReport zone;
   const _PinDates({required this.zone});
 
   @override
@@ -1296,7 +1373,7 @@ class _PinDates extends StatelessWidget {
         Icon(icon, size: 15, color: color),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(text, style: TextStyle(color: color, fontSize: 12.5)),
+          child: Text(text, style: TextStyle(color: color, fontSize: 13)),
         ),
       ],
     );

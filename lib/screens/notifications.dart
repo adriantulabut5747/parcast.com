@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import '../data/demo_data.dart';
+import '../services/alerts.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/tugak.dart';
 import 'home_shell.dart';
 
 /// ============================================================
-/// NOTIFICATIONS — the alerts from the Admin and PAGASA, opened
-/// from the bell (a sheet on phones, a popup on wider screens)
+/// NOTIFICATIONS — the Admin's alerts (services/alerts.dart, table
+/// `alerts`), opened from the bell (a sheet on phones, a popup on wider
+/// screens)
 /// ============================================================
 /// Reports from residents live in the Reports tab; this is only for
-/// official-style notices. The newest unread High alert also shows as a
-/// red strip on the Weather tab.
+/// alerts and advisories. The newest unread High alert also turns Tugak
+/// serious on the Weather tab.
 
 /// Opens the notifications. [context] must be inside HomeShell (the bell
 /// button's), so "View on map" can switch tabs.
@@ -43,14 +46,14 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
 
   // `.where(...)` keeps only the alerts of the picked category.
   List<AppAlert> get _filtered => _filter == null
-      ? kAlerts
-      : kAlerts.where((a) => a.category == _filter).toList();
+      ? alerts.value
+      : alerts.value.where((a) => a.category == _filter).toList();
 
   // `{...readAlerts.value, a.id}` = a NEW set with the old ids plus this
   // one. It has to be a new set, not .add(), or the listeners (bell badge,
   // the Weather strip) aren't told. See readAlerts in demo_data.dart.
   void _read(AppAlert a) {
-    readAlerts.value = {...readAlerts.value, a.id};
+    markAlertsRead([a.alertId]);
     setState(() => _open = a);
   }
 
@@ -63,7 +66,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
       duration: const Duration(milliseconds: 220),
       child: _open != null
           ? Column(
-              key: ValueKey(_open!.id),
+              key: ValueKey(_open!.alertId),
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 PressableScale(
@@ -82,7 +85,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                           'All notifications',
                           style: TextStyle(
                             color: c.accent,
-                            fontSize: 14,
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -93,15 +96,16 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                 _AlertDetails(alert: _open!, onViewMap: widget.onViewMap),
               ],
             )
-          : ValueListenableBuilder<Set<String>>(
+          : ListenableBuilder(
               key: const ValueKey('list'),
-              valueListenable: readAlerts,
-              builder: (context, read, _) => _list(c, read),
+              listenable: Listenable.merge([alerts, readAlerts]),
+              builder: (context, _) => _list(c, readAlerts.value),
             ),
     );
   }
 
-  Widget _list(AppColors c, Set<String> read) {
+  Widget _list(AppColors c, Set<int> read) {
+    final all = alerts.value;
     final items = _filtered;
     final unread = unreadAlertCount;
     // "Today" = less than 24 hours old.
@@ -122,9 +126,9 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                     style: TextStyle(
                       fontFamily: kDisplayFont,
                       color: c.textPrimary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: displayTracking(22),
                     ),
                   ),
                   Text(
@@ -138,8 +142,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
             ),
             if (unread > 0)
               PressableScale(
-                onTap: () =>
-                    readAlerts.value = kAlerts.map((a) => a.id).toSet(),
+                onTap: () => markAlertsRead(all.map((a) => a.alertId)),
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
@@ -154,32 +157,34 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
               ),
           ],
         ),
-        const SizedBox(height: 14),
-        SizedBox(
-          height: 40,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            children: [
-              SelectChip(
-                label: 'All  ${kAlerts.length}',
-                selected: _filter == null,
-                onTap: () => setState(() => _filter = null),
-              ),
-              for (final cat in AlertCategory.values) ...[
-                const SizedBox(width: 8),
+        if (all.isEmpty) _nothing(c),
+        if (all.isNotEmpty) const SizedBox(height: 14),
+        if (all.isNotEmpty)
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              children: [
                 SelectChip(
-                  label:
-                      '${cat.label}  ${kAlerts.where((a) => a.category == cat).length}',
-                  icon: cat.icon,
-                  selected: _filter == cat,
-                  onTap: () => setState(() => _filter = cat),
+                  label: 'All  ${all.length}',
+                  selected: _filter == null,
+                  onTap: () => setState(() => _filter = null),
                 ),
+                for (final cat in AlertCategory.values) ...[
+                  const SizedBox(width: 8),
+                  SelectChip(
+                    label:
+                        '${cat.label}  ${all.where((a) => a.category == cat).length}',
+                    icon: cat.icon,
+                    selected: _filter == cat,
+                    onTap: () => setState(() => _filter = cat),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
-        if (items.isEmpty)
+        if (items.isEmpty && all.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 40),
             child: Text(
@@ -202,8 +207,26 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
     );
   }
 
+  // No alerts posted at all: say so plainly (Tugak, calm).
+  Widget _nothing(AppColors c) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 32),
+    child: Column(
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: const TugakSay(
+            'When the Admin posts a flood, weather, road or shelter alert, it shows up here.',
+            title: 'No alerts right now',
+          ),
+        ),
+        const SizedBox(height: 4),
+        const TugakImage(size: 110),
+      ],
+    ),
+  );
+
   // A group of alerts as one well, thin lines between them.
-  Widget _group(AppColors c, List<AppAlert> alerts, Set<String> read) {
+  Widget _group(AppColors c, List<AppAlert> alerts, Set<int> read) {
     return Container(
       decoration: BoxDecoration(
         color: c.surfaceAlt,
@@ -214,7 +237,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
         children: [
           for (var i = 0; i < alerts.length; i++) ...[
             if (i > 0) Divider(height: 1, color: c.border),
-            _row(c, alerts[i], unread: !read.contains(alerts[i].id)),
+            _row(c, alerts[i], unread: !read.contains(alerts[i].alertId)),
           ],
         ],
       ),
@@ -250,7 +273,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: c.textPrimary,
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: unread
                                   ? FontWeight.w800
                                   : FontWeight.w600,
@@ -272,7 +295,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                           timeAgo(a.ago),
                           style: TextStyle(
                             color: c.textSecondary,
-                            fontSize: 11.5,
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -284,7 +307,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: c.textSecondary,
-                        fontSize: 12.5,
+                        fontSize: 13,
                         height: 1.4,
                       ),
                     ),
@@ -295,7 +318,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                           a.severity.label,
                           style: TextStyle(
                             color: color,
-                            fontSize: 11.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -305,7 +328,7 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: c.textSecondary,
-                              fontSize: 11.5,
+                              fontSize: 12,
                             ),
                           ),
                         ),
@@ -355,7 +378,7 @@ class _AlertDetails extends StatelessWidget {
               '${a.severity.label} severity · ${a.category.label}',
               style: TextStyle(
                 color: color,
-                fontSize: 12.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -367,9 +390,9 @@ class _AlertDetails extends StatelessWidget {
           style: TextStyle(
             fontFamily: kDisplayFont,
             color: c.textPrimary,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            letterSpacing: displayTracking(22),
           ),
         ),
         const SizedBox(height: 16),
@@ -388,13 +411,13 @@ class _AlertDetails extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Photo of the area, not of the current flood.',
-            style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
           ),
         ],
         const SizedBox(height: 16),
         Text(
           a.details,
-          style: TextStyle(color: c.textPrimary, fontSize: 14.5, height: 1.6),
+          style: TextStyle(color: c.textPrimary, fontSize: 15, height: 1.6),
         ),
         const SizedBox(height: 20),
         const FieldLabel('What to do'),
@@ -429,7 +452,7 @@ class _AlertDetails extends StatelessWidget {
                       a.actions[i],
                       style: TextStyle(
                         color: c.textPrimary,
-                        fontSize: 14,
+                        fontSize: 15,
                         height: 1.4,
                       ),
                     ),
@@ -454,7 +477,7 @@ class _AlertDetails extends StatelessWidget {
       children: [
         Icon(icon, size: 15, color: c.textSecondary),
         const SizedBox(width: 4),
-        Text(text, style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+        Text(text, style: TextStyle(color: c.textSecondary, fontSize: 13)),
       ],
     );
   }

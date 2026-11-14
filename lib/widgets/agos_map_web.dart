@@ -137,6 +137,12 @@ class _AgosMapState extends State<AgosMap> implements MapBackend {
             widget.controller?.bearing.value = bearing.toDartDouble;
             widget.controller?.pitch.value = pitch.toDartDouble;
           }).toJS,
+          onMoveEnd: ((JSNumber lat, JSNumber lng) {
+            widget.controller?.center.value = LatLng(
+              lat.toDartDouble,
+              lng.toDartDouble,
+            );
+          }).toJS,
           onReady: (() {}).toJS,
         ),
       );
@@ -275,7 +281,7 @@ class _AgosMapState extends State<AgosMap> implements MapBackend {
                     'It needs WebGL. Try updating the browser, or open the '
                     'app in Chrome or Safari.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+                    style: TextStyle(color: c.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -321,6 +327,7 @@ extension type _Callbacks._(JSObject _) implements JSObject {
   external factory _Callbacks({
     JSFunction onPinTap,
     JSFunction onCamera,
+    JSFunction onMoveEnd,
     JSFunction onReady,
   });
 }

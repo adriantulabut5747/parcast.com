@@ -2,330 +2,332 @@
 <!--
   AgosAlert landing page. Plain HTML/CSS/JS, no build step.
   The deploy workflow copies this folder to the site root and puts the
-  Flutter app in /app/. Logging in here opens the app with ?as=user or
-  ?as=guest (see lib/services/session.dart).
+  Flutter app in /app/. "Open the app" opens app/ (login screen) or
+  app/?as=guest (see lib/services/session.dart).
+
+  Nov 14 2026 redesign (reference: discord.com's landing page, darker):
+  a starry night sky, Tugak (the app's 3D toad) explaining every section
+  in a pose made for it (tools/tugak3d.py --poses), sections alternating
+  sides, barangay and photo marquees, more phone mockups. Dark only: the
+  stars don't work on the light theme.
 -->
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AgosAlert · Flood alerts for Mabalacat City</title>
   <meta name="description" content="Live weather, community flood reports, and emergency help for every barangay in Mabalacat City, Pampanga. An unofficial school project.">
-  <meta name="theme-color" content="#060911">
+  <meta name="theme-color" content="#05060c">
+  <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/png" href="img/favicon.png">
-
-  <!-- Pick the theme before anything is drawn, so a light-mode visitor
-       never sees a flash of the dark page. Order: ?theme= from the app,
-       then the visitor's last choice, then their system setting. -->
-  <script>
-    (function () {
-      var t = new URLSearchParams(location.search).get('theme');
-      try { t = t || localStorage.getItem('agos-theme'); } catch (e) {}
-      if (t !== 'light' && t !== 'dark') {
-        t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-      }
-      document.documentElement.dataset.theme = t;
-      // Lets the CSS hide things that JavaScript will fade in later. With
-      // no JavaScript, nothing is hidden.
-      document.documentElement.classList.add('js');
-    })();
-  </script>
+  <!-- Lets the CSS hide things that JavaScript will fade in later. With
+       no JavaScript, nothing is hidden. -->
+  <script>document.documentElement.classList.add('js');</script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://api.open-meteo.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
-  <!-- Only the icons this page uses (icon_names must stay in A-Z order). -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,1,0&icon_names=ac_unit,account_balance,air,alternate_email,arrow_downward,arrow_forward,call,clear_night,close,cloud,contact_phone,content_copy,dark_mode,delete,foggy,grain,home_work,info,light_mode,local_fire_department,local_police,location_on,lock,nights_stay,opacity,partly_cloudy_day,phone_in_talk,photo_camera,shield,sunny,thumb_up,thunderstorm,umbrella,visibility,visibility_off,water_drop&display=block">
+  <!-- Inter with its optical sizes (Display cut for big type), for non-Apple
+       devices; Apple devices use their own SF Pro (see landing.css). -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..800&display=swap">
+  <!-- The app's icons (CupertinoIcons), from tools/make_landing_icons.py. -->
+  <link rel="preload" href="fonts/cupertino.woff" as="font" type="font/woff" crossorigin>
+  <link rel="preload" href="img/tugak/hero.webp" as="image">
+  <link rel="stylesheet" href="icons.css">
   <link rel="stylesheet" href="landing.css">
 </head>
 <body>
-  <div class="page">
-    <header class="hero" id="hero">
-      <svg class="water-lines" id="waterLines" aria-hidden="true"></svg>
+  <!-- The night sky behind the whole page: stars drawn once by landing.js. -->
+  <div class="sky" aria-hidden="true">
+    <div class="stars s1"></div>
+    <div class="stars s2"></div>
+    <div class="stars s3"></div>
+    <span class="shooting"></span>
+  </div>
 
-      <header class="topbar">
+  <div class="page">
+    <!-- ======================= HERO ======================= -->
+    <header class="hero" id="top">
+      <nav class="topbar" aria-label="Main">
         <a class="brand" href="./" aria-label="AgosAlert home">
-          <img class="logo-on-dark" src="img/logo_wordmark_dark.png" alt="agosalert." width="158" height="36">
-          <img class="logo-on-light" src="img/logo_wordmark.png" alt="agosalert." width="158" height="36">
+          <img src="img/logo_wordmark_dark.png" alt="agosalert." width="158" height="36">
         </a>
-        <div class="topbar-actions">
-          <button class="icon-btn" id="themeToggle" type="button" aria-label="Switch to light mode">
-            <span class="ms ms-dark" aria-hidden="true">dark_mode</span>
-            <span class="ms ms-light" aria-hidden="true">light_mode</span>
-          </button>
-          <button class="btn btn-login" id="openLogin" type="button">Log in</button>
+        <div class="nav-links">
+          <a href="#weather">Weather</a>
+          <a href="#reports">Reports</a>
+          <a href="#hotlines">Hotlines</a>
+          <a href="#barangays">Coverage</a>
+          <a href="#faq">FAQ</a>
         </div>
-      </header>
+        <button class="btn btn-white btn-sm" type="button" data-open-app>Open the app</button>
+      </nav>
 
       <div class="hero-grid">
-        <section class="copy" aria-labelledby="headline">
-          <h1 id="headline">
-            <span class="line">Flood alerts for</span>
-            <span class="line accent">every barangay in Mabalacat.</span>
-          </h1>
+        <section class="hero-copy" aria-labelledby="headline">
           <!-- Filled in by landing.js from the time in Mabalacat. -->
-          <p class="greeting" id="greeting">
-            <span class="kap">Mayap a salubung!</span>
-            <span class="tr">Welcome, Mabalacat.</span>
-          </p>
-
-          <div class="stores">
-            <button class="store" type="button" data-store="Android">
-              <svg viewBox="0 0 24 26" width="22" height="24" aria-hidden="true">
-                <path fill="#00D7FE" d="M1.2.6C.9.9.8 1.4.8 2v22c0 .6.1 1.1.4 1.4L13.3 13.3z"/>
-                <path fill="#FFCE00" d="M17.3 17.4 13.3 13.3l4-4 4.8 2.7c1.4.8 1.4 2.1 0 2.9z"/>
-                <path fill="#FF3A44" d="M17.3 17.4 13.3 13.3 1.2 25.4c.4.5 1.2.5 2 .1z"/>
-                <path fill="#00F076" d="M17.3 9.3 3.2 1.2c-.8-.5-1.6-.4-2 .1l12.1 12.1z"/>
-              </svg>
-              <span class="store-text"><small>Coming soon on</small>Google Play</span>
+          <p class="greeting" id="greeting"><span class="kap">Mayap a salubung!</span> Welcome, Mabalacat.</p>
+          <!-- Three lines on every screen (Adrian, Nov 14 2026). -->
+          <h1 id="headline"><span>Flood alerts for</span> <span>every barangay</span> <span>in Mabalacat.</span></h1>
+          <p class="lede">Live rain forecasts, flood reports from your neighbors, and help one tap away. Tugak, our toad in the fedora, will walk you through it.</p>
+          <div class="hero-cta">
+            <button class="btn btn-white btn-lg" type="button" data-open-app>
+              <span class="ms" aria-hidden="true" data-i="arrow_right"></span>Open AgosAlert
             </button>
-            <button class="store" type="button" data-store="iPhone">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                <path fill="currentColor" d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.8-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-3.9zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/>
-              </svg>
-              <span class="store-text"><small>Coming soon on the</small>App Store</span>
+            <button class="btn btn-blue btn-lg" type="button" data-guest>
+              <span class="ms" aria-hidden="true" data-i="eye_fill"></span>Look around as a guest
             </button>
           </div>
         </section>
 
-        <!-- Honest stand-in for the reference's testimonial card. -->
-        <aside class="coverage" aria-label="Coverage">
-          <div class="coverage-head">
-            <span class="coverage-num">27</span>
-            <span class="coverage-label">
-              <strong>barangays covered</strong>
-              All of Mabalacat City, Pampanga
-            </span>
-          </div>
-          <div class="marquee" aria-hidden="true">
-            <div class="marquee-track" id="barangayTrack"></div>
-          </div>
-        </aside>
+        <!-- One spot each: Tugak's bubble top left, the app's map (tilted into
+             3D, a real screenshot: img/map-3d.webp) top right, Tugak (live 3D,
+             landing/tugak.js) bottom left, the live weather card bottom right.
+             The pictures are decoration; the weather is also in #weatherText. -->
+        <div class="hero-art">
+          <div class="glow g-blue" aria-hidden="true"></div>
 
-        <!-- The two phones. Everything inside is decoration for sighted
-             visitors; the live weather is also described in text below. -->
-        <div class="stage-wrap" aria-hidden="true">
-          <div class="stage" id="stage">
-            <div class="device back">
-              <div class="bob">
-                <div class="phone">
-                  <div class="phone-edge"></div>
-                  <div class="screen">
-                    <div class="statusbar">
-                      <span class="sb-time">9:41</span>
-                      <svg class="sb-icons" viewBox="0 0 46 12" width="46" height="12">
-                        <rect x="0" y="8" width="3" height="4" rx="1"/><rect x="4.5" y="5.5" width="3" height="6.5" rx="1"/><rect x="9" y="3" width="3" height="9" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/>
-                        <rect x="21.5" y="1" width="21" height="10" rx="3" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="23.5" y="3" width="15" height="6" rx="1.5"/><rect x="43.5" y="4" width="1.8" height="4" rx=".9" fill-opacity=".45"/>
-                      </svg>
-                    </div>
-                    <img class="shot shot-dark" src="img/map-dark.webp" alt="" width="780" height="1590" decoding="async">
-                    <img class="shot shot-light" src="img/map-light.webp" alt="" width="780" height="1590" decoding="async" loading="lazy">
-                  </div>
-                  <span class="island"></span>
+          <div class="hp-3d" aria-hidden="true"><div class="phone">
+            <div class="screen"><div class="statusbar"><span class="sb-time">9:41</span><span class="sb-icons"></span></div>
+              <img class="shot" src="img/map-3d.webp" alt="" width="780" height="1590" decoding="async"></div>
+            <span class="island"></span>
+          </div></div>
+
+          <div class="tugak-3d" id="tugak3d" aria-hidden="true">
+            <img class="tg-poster" src="img/tugak/hero.webp" alt="" width="600" height="700">
+          </div>
+
+          <div class="wstack" aria-hidden="true">
+            <div class="wcard" id="weatherCard" data-state="loading">
+              <div class="wcard-top">
+                <span class="live-dot"></span>
+                <span class="wcard-kicker">Live · Mabalacat City</span>
+                <span class="wcard-time" id="wTime"></span>
+              </div>
+              <div class="wcard-main">
+                <div>
+                  <div class="wcard-temp"><span id="wTemp">--</span>°</div>
+                  <div class="wcard-label" id="wLabel">Checking the sky…</div>
+                  <div class="wcard-sub" id="wSub">&nbsp;</div>
                 </div>
+                <span class="ms wcard-icon" id="wIcon" data-i="cloud_fill"></span>
+              </div>
+              <div class="wcard-stats">
+                <div><span class="ms" data-i="umbrella_fill"></span><b id="wRainChance">--</b><small>Rain chance</small></div>
+                <div><span class="ms" data-i="drop_fill"></span><b id="wRainSum">--</b><small>Rain today</small></div>
+                <div><span class="ms" data-i="drop"></span><b id="wHumidity">--</b><small>Humidity</small></div>
+                <div><span class="ms" data-i="wind"></span><b id="wWind">--</b><small>Wind</small></div>
               </div>
             </div>
-
-            <div class="device front">
-              <div class="bob">
-                <div class="phone">
-                  <div class="phone-edge"></div>
-                  <div class="screen">
-                    <div class="statusbar">
-                      <span class="sb-time">9:41</span>
-                      <svg class="sb-icons" viewBox="0 0 46 12" width="46" height="12">
-                        <rect x="0" y="8" width="3" height="4" rx="1"/><rect x="4.5" y="5.5" width="3" height="6.5" rx="1"/><rect x="9" y="3" width="3" height="9" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/>
-                        <rect x="21.5" y="1" width="21" height="10" rx="3" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="23.5" y="3" width="15" height="6" rx="1.5"/><rect x="43.5" y="4" width="1.8" height="4" rx=".9" fill-opacity=".45"/>
-                      </svg>
-                    </div>
-                    <img class="shot shot-dark" src="img/home-dark.webp" alt="" width="780" height="1590" fetchpriority="high">
-                    <img class="shot shot-light" src="img/home-light.webp" alt="" width="780" height="1590" decoding="async" loading="lazy">
-                  </div>
-                  <span class="island"></span>
-                </div>
-
-                <!-- The live weather card and flood outlook chip, popping out
-                     of the phone. Same data, look, and rules as the app's
-                     Home tab (weather.dart). -->
-                <div class="wstack">
-                <div class="wcard" id="weatherCard" data-state="loading">
-                  <svg class="wcard-waves" viewBox="0 0 1440 120" preserveAspectRatio="none">
-                    <path d="M0 60 C180 20 540 100 720 60 C900 20 1260 100 1440 60 V120 H0Z"/>
-                    <path d="M0 85 C120 115 240 55 360 85 C480 115 600 55 720 85 C840 115 960 55 1080 85 C1200 115 1320 55 1440 85 V120 H0Z"/>
-                  </svg>
-                  <div class="wcard-top">
-                    <span class="live-dot"></span>
-                    <span class="wcard-kicker">Live weather · Mabalacat City</span>
-                    <span class="wcard-time" id="wTime"></span>
-                  </div>
-                  <div class="wcard-main">
-                    <div>
-                      <div class="wcard-temp"><span id="wTemp">--</span>°</div>
-                      <div class="wcard-label" id="wLabel">Checking the sky…</div>
-                      <div class="wcard-sub" id="wSub">&nbsp;</div>
-                    </div>
-                    <span class="ms wcard-icon" id="wIcon">cloud</span>
-                  </div>
-                  <div class="wcard-stats">
-                    <div><span class="ms">umbrella</span><b id="wRainChance">--</b><small>Rain chance</small></div>
-                    <div><span class="ms">water_drop</span><b id="wRainSum">--</b><small>Rain today</small></div>
-                    <div><span class="ms">opacity</span><b id="wHumidity">--</b><small>Humidity</small></div>
-                    <div><span class="ms">air</span><b id="wWind">--</b><small>Wind</small></div>
-                  </div>
-                </div>
-                <div class="wchip" id="outlookChip" data-risk="loading" title="Estimated from today's rain forecast. Not an official warning.">
-                  <span class="wchip-dot"></span>
-                  <span class="wchip-text"><small>Flood outlook today</small><b id="oLevel">Checking…</b></span>
-                </div>
-                </div>
-              </div>
+            <div class="wchip" id="outlookChip" data-risk="loading" title="Estimated from today's rain forecast. Not an official warning.">
+              <span class="wchip-dot"></span>
+              <span class="wchip-text"><small>Flood outlook today · estimate</small><b id="oLevel">Checking…</b></span>
             </div>
           </div>
+
+          <!-- Tugak's line about today's real weather (landing.js). Not
+               aria-hidden, so screen readers get it. -->
+          <p class="say say-hero" id="heroSay" data-side="left"><b>Tugak</b><span class="say-text">Checking the sky for you…</span></p>
         </div>
+      </div>
 
-        <!-- Honest stand-in for the reference's award badge. -->
-        <aside class="notice">
-          <span class="ms notice-icon" aria-hidden="true">info</span>
-          <p><strong>Unofficial demo</strong>Not from the Mabalacat City government. A school capstone project.</p>
-        </aside>
+      <div class="hero-foot">
+        <div class="stores">
+          <button class="store" type="button" data-store="Android">
+            <svg viewBox="0 0 24 26" width="18" height="20" aria-hidden="true">
+              <path fill="#00D7FE" d="M1.2.6C.9.9.8 1.4.8 2v22c0 .6.1 1.1.4 1.4L13.3 13.3z"/>
+              <path fill="#FFCE00" d="M17.3 17.4 13.3 13.3l4-4 4.8 2.7c1.4.8 1.4 2.1 0 2.9z"/>
+              <path fill="#FF3A44" d="M17.3 17.4 13.3 13.3 1.2 25.4c.4.5 1.2.5 2 .1z"/>
+              <path fill="#00F076" d="M17.3 9.3 3.2 1.2c-.8-.5-1.6-.4-2 .1l12.1 12.1z"/>
+            </svg>
+            <span class="store-text"><small>Coming soon on</small>Google Play</span>
+          </button>
+          <button class="store" type="button" data-store="iPhone">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor" d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.8-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-3.9zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/>
+            </svg>
+            <span class="store-text"><small>Coming soon on the</small>App Store</span>
+          </button>
+        </div>
+        <p class="notice"><span class="ms" aria-hidden="true" data-i="info_circle_fill"></span><span><strong>Unofficial demo.</strong> Not from the Mabalacat City government. A school capstone project.</span></p>
       </div>
 
       <!-- For screen readers: the weather card above is hidden from them. -->
       <p class="sr-only" id="weatherText" aria-live="polite"></p>
     </header>
 
+    <!-- ======================= BARANGAY MARQUEE ======================= -->
+    <section class="marquee-band" aria-label="All 27 barangays of Mabalacat City">
+      <div class="mq mq-a" aria-hidden="true"><div class="mq-track" id="mqA"></div></div>
+      <div class="mq mq-b" aria-hidden="true"><div class="mq-track" id="mqB"></div></div>
+      <p class="sr-only" id="barangayList"></p>
+    </section>
+
     <main>
-      <!-- ================= 01 HOW IT WORKS =================
-           Four cards, each explaining the real mechanism behind a feature.
-           Cards 1 and 2 show today's live numbers (filled in by landing.js
-           from the same Open-Meteo request as the hero's weather card). -->
-      <section class="sec how" id="how" aria-labelledby="how-title">
-        <div class="sec-head reveal">
-          <p class="sec-num"><span>01</span> How it works</p>
-          <h2 id="how-title">From the rain forecast to help at your door.</h2>
-          <p class="sec-lede">What AgosAlert does behind the screen, step by step. The numbers in the first two cards are today's, live.</p>
+      <!-- ======================= THE APP, FOUR SCREENS ======================= -->
+      <section class="sec tour" aria-labelledby="tour-title">
+        <div class="sec-head center">
+          <p class="eyebrow">The app</p>
+          <h2 id="tour-title">Four tabs. That’s the whole app.</h2>
+          <p class="sec-lede">No menus to dig through. Weather, the map, neighbors’ reports, and help, each one tap from the bottom bar.</p>
         </div>
-
-        <ol class="how-cards">
-          <li class="how-card reveal">
-            <p class="how-step">Step 01</p>
-            <h3>We read the sky</h3>
-            <p>Every 15 minutes, AgosAlert asks Open-Meteo for Mabalacat's forecast: the chance of rain today, how many millimeters are expected, and the weather code, which tells a light shower from a thunderstorm.</p>
-            <div class="how-visual readings" aria-live="polite">
-              <div class="reading"><span>Rain chance today</span><b id="hwChance">--</b></div>
-              <div class="reading"><span>Rain expected today</span><b id="hwSum">--</b></div>
-              <div class="reading"><span>Weather code</span><b id="hwCode">--</b></div>
-              <p class="reading-foot"><span class="live-dot"></span><span id="hwTime">Checking the forecast…</span></p>
-            </div>
+        <ul class="parade" id="parade" role="list">
+          <li class="pop">
+            <div class="phone"><div class="screen"><div class="statusbar"><span class="sb-time">9:41</span><span class="sb-icons"></span></div><img class="shot" src="img/phone-weather.webp" alt="The Weather tab: the live Mabalacat card and the next 5 days" width="780" height="1590" loading="lazy"></div><span class="island"></span></div>
+            <p><b>Weather</b>Right now, and the next 5 days.</p>
           </li>
-
-          <li class="how-card reveal">
-            <p class="how-step">Step 02</p>
-            <h3>Rain becomes a risk level</h3>
-            <p>The app checks those numbers against three rules, from worst to best. The first rule that matches is the flood outlook you see on the Home tab. It's an estimate, not an official warning.</p>
-            <div class="how-visual rules">
-              <div class="rule" data-level="high"><span class="rule-dot"></span><b>High</b><span>30 mm or more, or a thunderstorm with a 60%+ chance</span></div>
-              <div class="rule" data-level="moderate"><span class="rule-dot"></span><b>Moderate</b><span>10 mm or more, or a 70%+ chance of rain</span></div>
-              <div class="rule" data-level="low"><span class="rule-dot"></span><b>Low</b><span>Anything less</span></div>
-            </div>
+          <li class="pop">
+            <div class="phone"><div class="screen"><div class="statusbar"><span class="sb-time">9:41</span><span class="sb-icons"></span></div><img class="shot" src="img/map-3d-dau.webp" alt="The map tilted into 3D over Dau, Mabalacat" width="780" height="1590" loading="lazy"></div><span class="island"></span></div>
+            <p><b>Map</b>The whole city, in 3D.</p>
           </li>
-
-          <li class="how-card reveal">
-            <p class="how-step">Step 03</p>
-            <h3>Neighbors report the water</h3>
-            <p>Anyone logged in can report a flood: pick the barangay, add a photo, and set how deep the water is, from ankle-deep to over the head. The report becomes a pin on the map, and other people vote on whether it's accurate.</p>
-            <div class="how-visual lifecycle">
-              <ol class="life">
-                <li><span class="ms" aria-hidden="true">photo_camera</span><b>Reported</b><small>Day 0</small></li>
-                <li><span class="ms" aria-hidden="true">location_on</span><b>Pinned</b><small>On the map</small></li>
-                <li><span class="ms" aria-hidden="true">thumb_up</span><b>Voted on</b><small>Accurate?</small></li>
-                <li class="gone"><span class="ms" aria-hidden="true">delete</span><b>Removed</b><small>Day 14</small></li>
-              </ol>
-              <p class="life-note">Reports in the app are sample data for now.</p>
-            </div>
+          <li class="pop">
+            <div class="phone"><div class="screen"><div class="statusbar"><span class="sb-time">9:41</span><span class="sb-icons"></span></div><img class="shot" src="img/phone-reports.webp" alt="The Reports tab: neighbors' flood posts, newest first" width="780" height="1590" loading="lazy"></div><span class="island"></span></div>
+            <p><b>Reports</b>Neighbors post what they see.</p>
           </li>
-
-          <li class="how-card reveal">
-            <p class="how-step">Step 04</p>
-            <h3>You get help</h3>
-            <p>The Assistance tab keeps help one tap away. Press and hold SOS to call for help or request a rescue, find the nearest open evacuation center with directions, or call a hotline.</p>
-            <div class="how-visual helps">
-              <span class="help sos">SOS<small>Press and hold</small></span>
-              <span class="help"><span class="ms" aria-hidden="true">home_work</span>Evacuation centers</span>
-              <a class="help" href="#hotlines"><span class="ms" aria-hidden="true">call</span>Hotlines, below<span class="ms" aria-hidden="true">arrow_downward</span></a>
-            </div>
+          <li class="pop">
+            <div class="phone"><div class="screen"><div class="statusbar"><span class="sb-time">9:41</span><span class="sb-icons"></span></div><img class="shot" src="img/phone-help.webp" alt="The Help tab: hold-to-call SOS and hotlines" width="780" height="1590" loading="lazy"></div><span class="island"></span></div>
+            <p><b>Help</b>Hold SOS. Call a hotline.</p>
           </li>
-        </ol>
+        </ul>
+        <!-- Phones only: two pages of two phones, a dot per page (landing.js). -->
+        <div class="parade-dots" id="paradeDots">
+          <button type="button" aria-label="Weather and Map" aria-current="true"></button>
+          <button type="button" aria-label="Reports and Help"></button>
+        </div>
       </section>
 
-      <!-- ================= 02 HOTLINES ================= -->
-      <section class="sec hotlines" id="hotlines" aria-labelledby="hot-title">
-        <div class="hot-grid">
-          <div class="sec-head reveal">
-            <p class="sec-num"><span>02</span> Emergency hotlines</p>
-            <h2 id="hot-title">Save these numbers before you need them.</h2>
-            <p class="sec-lede">During a flood you shouldn't have to search for a phone number. Save all five to your contacts now, in one step.</p>
-            <button class="btn btn-primary btn-save" type="button" id="saveContacts">
-              <span class="ms" aria-hidden="true">contact_phone</span>
-              Save all 5 to my contacts
-            </button>
-            <p class="save-note">Downloads one contacts file (.vcf). Open it on your phone to add all five numbers.</p>
+      <!-- ======================= 01 WEATHER (Tugak right) ======================= -->
+      <section class="row" id="weather" aria-labelledby="weather-title">
+        <div class="row-copy">
+          <p class="sec-num"><span>01</span> Weather</p>
+          <h2 id="weather-title">Know it’s coming before it rains.</h2>
+          <p class="sec-lede">Every 15 minutes, AgosAlert asks Open-Meteo for Mabalacat’s forecast: the chance of rain, the millimeters expected, and the weather code that tells a shower from a thunderstorm. Today’s numbers, live:</p>
+          <div class="panel readings" aria-live="polite">
+            <div class="reading"><span>Rain chance</span><b id="hwChance">--</b></div>
+            <div class="reading"><span>Rain expected</span><b id="hwSum">--</b></div>
+            <div class="reading"><span>Weather code</span><b id="hwCode">--</b></div>
+            <p class="reading-foot"><span class="live-dot"></span><span id="hwTime">Checking the forecast…</span></p>
           </div>
+          <div class="panel rules">
+            <div class="rule" data-level="high"><span class="rule-dot"></span><b>High</b><span>30 mm or more, or a thunderstorm with a 60%+ chance</span></div>
+            <div class="rule" data-level="moderate"><span class="rule-dot"></span><b>Moderate</b><span>10 mm or more, or a 70%+ chance of rain</span></div>
+            <div class="rule" data-level="low"><span class="rule-dot"></span><b>Low</b><span>Anything less</span></div>
+          </div>
+        </div>
+        <div class="row-art art-umbrella">
+          <p class="say" data-side="right"><b>Tugak</b><span class="say-text">I check the sky every 15 minutes. You can stop opening the window.</span></p>
+          <div class="glow g-blue"></div>
+          <div class="rain"></div>
+          <img class="tugak pop" src="img/tugak/umbrella.webp" alt="" width="656" height="744" loading="lazy">
+        </div>
+      </section>
+
+      <!-- ======================= 02 REPORTS (Tugak left) ======================= -->
+      <section class="row flip" id="reports" aria-labelledby="reports-title">
+        <div class="row-copy">
+          <p class="sec-num"><span>02</span> Flood reports</p>
+          <h2 id="reports-title">Your neighbors report the water.</h2>
+          <p class="sec-lede">Anyone logged in can report a flood: drop a pin on the spot, add a photo, and set how deep the water is, from ankle-deep to over the head. It shows up on everyone’s map right away.</p>
+          <div class="panel lifecycle">
+            <ol class="life">
+              <li><span class="ms" aria-hidden="true" data-i="camera_fill"></span><b>Reported</b><small>Day 0</small></li>
+              <li><span class="ms" aria-hidden="true" data-i="location_solid"></span><b>Pinned</b><small>On the map</small></li>
+              <li><span class="ms" aria-hidden="true" data-i="hand_thumbsup_fill"></span><b>Voted on</b><small>Accurate?</small></li>
+              <li class="gone"><span class="ms" aria-hidden="true" data-i="trash"></span><b>Removed</b><small>Day 14</small></li>
+            </ol>
+            <p class="life-note">Reports are posted by users and aren’t checked by an official yet.</p>
+          </div>
+        </div>
+        <div class="row-art art-phone">
+          <p class="say" data-side="left"><b>Tugak</b><span class="say-text">See water on the road? Pin it, so the next person doesn’t drive into it. I’d do it myself, but no thumbs.</span></p>
+          <div class="glow g-indigo"></div>
+          <div class="ring"></div>
+          <img class="mini-pin p1" src="img/tugak/prop-pin.webp" alt="" width="161" height="336" loading="lazy">
+          <img class="mini-pin p2" src="img/tugak/prop-pin.webp" alt="" width="161" height="336" loading="lazy">
+          <img class="mini-pin p3" src="img/tugak/prop-pin.webp" alt="" width="161" height="336" loading="lazy">
+          <img class="tugak pop" src="img/tugak/phone.webp" alt="" width="737" height="734" loading="lazy">
+        </div>
+      </section>
+
+      <!-- ======================= PHOTO MARQUEE ======================= -->
+      <section class="photos" aria-labelledby="photos-title">
+        <div class="sec-head center">
+          <p class="eyebrow">Mabalacat, on a rainy day</p>
+          <h2 id="photos-title">This is what we keep an eye on.</h2>
+        </div>
+        <div class="photo-mq">
+          <div class="photo-track" id="photoTrack">
+            <img src="img/rain-6.webp" alt="A jeepney and a man with an umbrella on a wet street" width="1400" height="933" loading="lazy">
+            <img src="img/rain-2.webp" alt="Mount Arayat under big clouds, seen from a bridge" width="1400" height="934" loading="lazy">
+            <img src="img/rain-7.webp" alt="A covered sidewalk at night, the road shining with rain" width="1400" height="1050" loading="lazy">
+            <img src="img/rain-1.webp" alt="A storefront seen through a rainy window" width="1400" height="1050" loading="lazy">
+            <img src="img/rain-3.webp" alt="A food stall under an orange tent on a wet night" width="1400" height="875" loading="lazy">
+            <img src="img/rain-5.webp" alt="Raindrops on a vehicle window, green fields blurred behind" width="1400" height="1050" loading="lazy">
+            <img src="img/rain-4.webp" alt="A vendor's motorbike on a wet street at night" width="1400" height="875" loading="lazy">
+          </div>
+        </div>
+        <p class="photo-credit">Photos: Dexter Pimentel</p>
+      </section>
+
+      <!-- ======================= 03 HELP + HOTLINES (Tugak right) ======================= -->
+      <section class="row" id="hotlines" aria-labelledby="hot-title">
+        <div class="row-copy">
+          <p class="sec-num"><span>03</span> Help &amp; hotlines</p>
+          <h2 id="hot-title">Save these numbers before you need them.</h2>
+          <p class="sec-lede">The Help tab keeps help one tap away: press and hold SOS to call 911, find the nearest evacuation center, or call a hotline. Save all five to your contacts now, in one step.</p>
 
           <!-- Same numbers as the app (kHotlines in lib/data/demo_data.dart). -->
-          <ul class="hot-list reveal" id="hotList">
-            <li data-name="National Emergency Hotline" data-tel="911" data-color="#EF4444">
-              <span class="hot-icon ms" aria-hidden="true">phone_in_talk</span>
+          <ul class="hot-list" id="hotList">
+            <li data-name="National Emergency Hotline" data-tel="911" data-color="#FF453A">
+              <span class="hot-icon ms" aria-hidden="true" data-i="phone_fill"></span>
               <span class="hot-name">National Emergency Hotline<small>Police, fire, and medical emergencies</small></span>
               <a class="hot-num" href="tel:911">911</a>
-              <button class="hot-copy icon-btn" type="button" aria-label="Copy 911"><span class="ms" aria-hidden="true">content_copy</span></button>
+              <button class="hot-copy icon-btn" type="button" aria-label="Copy 911"><span class="ms" aria-hidden="true" data-i="doc_on_doc"></span></button>
             </li>
-            <li data-name="Mabalacat CDRRMO" data-tel="+639989994357" data-color="#2D7DD2">
-              <span class="hot-icon ms" aria-hidden="true">shield</span>
+            <li data-name="Mabalacat CDRRMO" data-tel="+639989994357" data-color="#8E8E93">
+              <span class="hot-icon ms" aria-hidden="true" data-i="exclamationmark_shield_fill"></span>
               <span class="hot-name">Mabalacat CDRRMO<small>City disaster risk reduction office</small></span>
               <a class="hot-num" href="tel:+639989994357">0998-999-4357</a>
-              <button class="hot-copy icon-btn" type="button" aria-label="Copy 0998-999-4357"><span class="ms" aria-hidden="true">content_copy</span></button>
+              <button class="hot-copy icon-btn" type="button" aria-label="Copy 0998-999-4357"><span class="ms" aria-hidden="true" data-i="doc_on_doc"></span></button>
             </li>
-            <li data-name="Bureau of Fire Protection" data-tel="+639339909960" data-color="#F97316">
-              <span class="hot-icon ms" aria-hidden="true">local_fire_department</span>
+            <li data-name="Bureau of Fire Protection" data-tel="+639339909960" data-color="#8E8E93">
+              <span class="hot-icon ms" aria-hidden="true" data-i="flame_fill"></span>
               <span class="hot-name">Bureau of Fire Protection<small>Mabalacat fire station</small></span>
               <a class="hot-num" href="tel:+639339909960">0933-990-9960</a>
-              <button class="hot-copy icon-btn" type="button" aria-label="Copy 0933-990-9960"><span class="ms" aria-hidden="true">content_copy</span></button>
+              <button class="hot-copy icon-btn" type="button" aria-label="Copy 0933-990-9960"><span class="ms" aria-hidden="true" data-i="doc_on_doc"></span></button>
             </li>
-            <li data-name="Mabalacat Police (PNP)" data-tel="+639985985458" data-color="#6366F1">
-              <span class="hot-icon ms" aria-hidden="true">local_police</span>
+            <li data-name="Mabalacat Police (PNP)" data-tel="+639985985458" data-color="#8E8E93">
+              <span class="hot-icon ms" aria-hidden="true" data-i="shield_fill"></span>
               <span class="hot-name">Mabalacat Police (PNP)<small>City police station</small></span>
               <a class="hot-num" href="tel:+639985985458">0998-598-5458</a>
-              <button class="hot-copy icon-btn" type="button" aria-label="Copy 0998-598-5458"><span class="ms" aria-hidden="true">content_copy</span></button>
+              <button class="hot-copy icon-btn" type="button" aria-label="Copy 0998-598-5458"><span class="ms" aria-hidden="true" data-i="doc_on_doc"></span></button>
             </li>
-            <li data-name="Mabalacat City Hall" data-tel="+63456498620" data-color="#14B8A6">
-              <span class="hot-icon ms" aria-hidden="true">account_balance</span>
+            <li data-name="Mabalacat City Hall" data-tel="+63456498620" data-color="#8E8E93">
+              <span class="hot-icon ms" aria-hidden="true" data-i="building_2_fill"></span>
               <span class="hot-name">Mabalacat City Hall<small>Landline</small></span>
               <a class="hot-num" href="tel:+63456498620">(045) 649-8620</a>
-              <button class="hot-copy icon-btn" type="button" aria-label="Copy (045) 649-8620"><span class="ms" aria-hidden="true">content_copy</span></button>
+              <button class="hot-copy icon-btn" type="button" aria-label="Copy (045) 649-8620"><span class="ms" aria-hidden="true" data-i="doc_on_doc"></span></button>
             </li>
           </ul>
+          <button class="btn btn-white btn-save" type="button" id="saveContacts">
+            <span class="ms" aria-hidden="true" data-i="person_badge_plus_fill"></span>
+            Save all 5 to my contacts
+          </button>
+          <p class="save-note">Downloads one contacts file (.vcf). Open it on your phone to add all five numbers.</p>
+        </div>
+        <div class="row-art art-handset">
+          <p class="say" data-side="right"><b>Tugak</b><span class="say-text">Save all five now. In a flood you won’t have time to search for them.</span></p>
+          <div class="glow g-blue"></div>
+          <img class="tugak pop" src="img/tugak/handset.webp" alt="" width="655" height="759" loading="lazy">
         </div>
       </section>
 
-      <!-- ================= 03 BARANGAY MAP ================= -->
-      <section class="map-sec" id="barangays" aria-labelledby="map-title">
-        <figure class="band">
-          <img src="img/plains-mabalacat.webp" alt="Evening sun breaking through clouds over grassy plains" width="2000" height="1500" loading="lazy">
-          <figcaption>
-            <span>Evening over the plains near Mabalacat, seen from the expressway.</span>
-            <a href="https://commons.wikimedia.org/wiki/File:Mabalacat_scenery_from_SCTEx_(N._Khan)_-_Flickr.jpg" target="_blank" rel="noopener">Photo: Nishat A. Khan, CC BY 2.0</a>
-          </figcaption>
-        </figure>
-
-        <div class="sec map-inner">
-          <div class="sec-head reveal">
-            <p class="sec-num"><span>03</span> Coverage</p>
-            <h2 id="map-title">Made for all 27 barangays of Mabalacat.</h2>
-            <p class="sec-lede">The weather and the flood outlook cover the whole city, from Sapang Balen in the north to Lakandula in the south. Point at a dot to see its name.</p>
-          </div>
-          <figure class="city-map reveal">
+      <!-- ======================= 04 COVERAGE (Tugak left) ======================= -->
+      <section class="row flip" id="barangays" aria-labelledby="map-title">
+        <div class="row-copy">
+          <p class="sec-num"><span>04</span> Coverage</p>
+          <h2 id="map-title">Made for all 27 barangays of Mabalacat.</h2>
+          <p class="sec-lede">The weather and the flood outlook cover the whole city, from Sapang Balen in the north to Lakandula in the south. Point at a dot to see its name.</p>
+          <figure class="city-map">
             <svg class="map-svg" viewBox="-10 -10 820 550" role="img" aria-label="Map of Mabalacat City with dots for its 27 barangays">
               <path class="city-shape" d="M0.0 218.0 L75.5 530.3 L117.8 477.8 L127.8 479.2 L132.2 462.7 L152.4 457.7 L152.1 453.0 L174.7 461.6 L174.3 452.4 L184.7 453.1 L195.7 471.6 L242.5 452.7 L279.8 453.6 L305.8 466.2 L347.5 457.5 L381.5 482.7 L387.1 503.8 L415.8 502.6 L477.7 473.4 L498.8 426.6 L525.4 437.3 L517.8 457.8 L560.3 466.3 L587.9 460.4 L585.0 448.3 L602.1 456.0 L640.7 440.9 L667.3 449.5 L693.7 443.9 L719.5 449.4 L779.3 433.5 L800.0 422.5 L669.9 0.0 L648.5 9.7 L604.0 2.4 L559.6 17.6 L496.9 13.0 L445.4 36.1 L419.9 56.8 L393.0 53.9 L374.9 72.2 L234.5 92.8 L181.3 137.7 L58.7 180.6 L0.0 218.0Z"/>
               <g class="map-extra" aria-hidden="true"><path class="north" d="M770 18 l-9 26 l9 -7 l9 7 z"/><text x="770" y="66" text-anchor="middle">N</text><line x1="20" y1="510" x2="236" y2="510"/><line x1="20" y1="503" x2="20" y2="517"/><line x1="236" y1="503" x2="236" y2="517"/><text x="20" y="494">0</text><text x="236" y="494" text-anchor="middle">5 km</text></g>
@@ -361,96 +363,124 @@
             <figcaption>City boundary and barangay locations: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</figcaption>
           </figure>
         </div>
+        <div class="row-art art-pin">
+          <p class="say" data-side="left"><b>Tugak</b><span class="say-text">All 27 barangays, Sapang Balen to Lakandula. Yes, yours too.</span></p>
+          <div class="glow g-teal"></div>
+          <div class="ring"></div>
+          <img class="tugak pop" src="img/tugak/pin.webp" alt="" width="803" height="633" loading="lazy">
+        </div>
       </section>
 
-      <!-- ================= 04 FAQ ================= -->
-      <section class="sec faq" id="faq" aria-labelledby="faq-title">
-        <div class="sec-head reveal">
-          <p class="sec-num"><span>04</span> FAQ</p>
+      <!-- ======================= 05 FAQ (Tugak right) ======================= -->
+      <section class="row" id="faq" aria-labelledby="faq-title">
+        <div class="row-copy">
+          <p class="sec-num"><span>05</span> FAQ</p>
           <h2 id="faq-title">Questions people ask.</h2>
+          <div class="faq-list">
+            <details>
+              <summary>Is AgosAlert official?</summary>
+              <p>No. AgosAlert is a school capstone project made by BSIT students. It isn’t made by, or connected to, the Mabalacat City government. For official warnings, follow PAGASA and the Mabalacat CDRRMO. All of its code is public on <a href="https://github.com/adriantulabut5747/AgosAlert" target="_blank" rel="noopener">GitHub</a>, so anyone can check what it does.</p>
+            </details>
+            <details>
+              <summary>Do I need an account?</summary>
+              <p>Only to report floods and vote on reports. The weather, the map, hotlines and SOS work without one: pick <em>Look around as a guest</em>. Accounts are free and only ask for your name, email, and barangay.</p>
+            </details>
+            <details>
+              <summary>Is the data real?</summary>
+              <p>The weather and the flood outlook are live. They come from Open-Meteo and update every 15 minutes. Flood reports are real posts from users, not yet checked by an official. Alerts and evacuation centers are still sample data, marked SAMPLE in the app.</p>
+            </details>
+            <details>
+              <summary>Why isn’t it on Google Play or the App Store?</summary>
+              <p>AgosAlert is a web app for now, so it works in any browser without installing anything. Mobile versions are planned. Until then, you can add it to your home screen: in Chrome on Android, open the menu and tap <em>Add to Home screen</em>. On iPhone, tap <em>Share</em>, then <em>Add to Home Screen</em>.</p>
+            </details>
+            <details>
+              <summary>Who is the toad?</summary>
+              <p>That’s Tugak, Kapampangan for frog. He reads the live weather in the app and tells you what to do first. On a high alert he skips the jokes.</p>
+            </details>
+          </div>
         </div>
-        <div class="faq-list reveal">
-          <details>
-            <summary>Is AgosAlert official?</summary>
-            <p>No. AgosAlert is a school capstone project made by BSIT students. It isn't made by, or connected to, the Mabalacat City government. For official warnings, follow PAGASA and the Mabalacat CDRRMO.</p>
-          </details>
-          <details>
-            <summary>Is the data real?</summary>
-            <p>The weather and the flood outlook are live. They come from Open-Meteo and update every 15 minutes. Flood reports, alerts, and evacuation centers are sample data for now, marked SAMPLE in the app, until the app is connected to a real server.</p>
-          </details>
-          <details>
-            <summary>Why isn't it on Google Play or the App Store?</summary>
-            <p>AgosAlert is a web app for now, so it works in any browser without installing anything. Mobile versions are planned. Until then, you can add it to your home screen: in Chrome on Android, open the menu and tap <em>Add to Home screen</em>. On iPhone, tap <em>Share</em>, then <em>Add to Home Screen</em>.</p>
-          </details>
+        <div class="row-art art-think">
+          <p class="say" data-side="right"><b>Tugak</b><span class="say-text">Fair questions. I had most of them too, and I live here.</span></p>
+          <div class="glow g-purple"></div>
+          <span class="qmark q1" aria-hidden="true">?</span><span class="qmark q2" aria-hidden="true">?</span>
+          <img class="tugak pop" src="img/tugak/think.webp" alt="" width="625" height="719" loading="lazy">
+        </div>
+      </section>
+
+      <!-- ======================= THE END ======================= -->
+      <section class="finale" aria-labelledby="end-title">
+        <div class="glow g-blue"></div>
+        <img class="tugak pop" src="img/tugak/tip.webp" alt="" width="621" height="787" loading="lazy">
+        <p class="say say-end" data-side="center"><b>Tugak</b><span class="say-text">That’s the tour. Stay dry out there.</span></p>
+        <h2 id="end-title">Check the sky before it checks you.</h2>
+        <div class="hero-cta">
+          <button class="btn btn-white btn-lg" type="button" data-open-app>
+            <span class="ms" aria-hidden="true" data-i="arrow_right"></span>Open AgosAlert
+          </button>
+          <button class="btn btn-blue btn-lg" type="button" data-guest>
+            <span class="ms" aria-hidden="true" data-i="eye_fill"></span>Look around as a guest
+          </button>
         </div>
       </section>
     </main>
 
     <footer class="foot">
       <div class="foot-top">
-        <img class="logo-on-dark" src="img/logo_wordmark_dark.png" alt="agosalert." width="132" height="30">
-        <img class="logo-on-light" src="img/logo_wordmark.png" alt="agosalert." width="132" height="30">
+        <img src="img/logo_wordmark_dark.png" alt="agosalert." width="132" height="30">
         <p>Unofficial demo. Not from the Mabalacat City government.</p>
       </div>
+      <p class="foot-made">
+        Made by BSIT students as a school capstone project.
+        <a href="https://github.com/adriantulabut5747/AgosAlert" target="_blank" rel="noopener">Source code</a>
+        <a href="https://github.com/adriantulabut5747/AgosAlert/issues" target="_blank" rel="noopener">Report a problem</a>
+      </p>
       <div class="foot-credits">
         <span>Weather: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a></span>
         <span>Map data: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</span>
-        <span>Photo: Nishat A. Khan (CC BY 2.0, Wikimedia Commons)</span>
+        <span>Photos: Dexter Pimentel</span>
         <span>© 2026 AgosAlert</span>
       </div>
     </footer>
   </div>
 
-  <!-- LOGIN POPUP. <dialog> + showModal() gives us, for free: the dark
-       backdrop, Esc to close, and keyboard focus kept inside the popup. -->
-  <dialog class="modal" id="loginModal" aria-labelledby="loginTitle">
-    <form class="modal-card" id="loginForm" novalidate>
+  <!-- OPEN-THE-APP POPUP. No email or password here: logging in happens
+       inside the app (lib/screens/login_screen.dart), through Supabase.
+       This only picks how to open it: the login screen (app/) or
+       straight in as a guest (app/?as=guest).
+       <dialog> + showModal() gives us, for free: the dark backdrop, Esc
+       to close, and keyboard focus kept inside the popup. -->
+  <dialog class="modal" id="loginModal" aria-labelledby="loginTitle" aria-describedby="loginSub">
+    <div class="modal-card">
       <button class="icon-btn modal-close" type="button" id="closeLogin" aria-label="Close">
-        <span class="ms" aria-hidden="true">close</span>
+        <span class="ms" aria-hidden="true" data-i="xmark"></span>
       </button>
-      <img class="modal-logo logo-on-dark" src="img/logo_icon_dark.png" alt="" width="56" height="56">
-      <img class="modal-logo logo-on-light" src="img/logo_icon.png" alt="" width="56" height="56">
-      <h2 id="loginTitle">Welcome back</h2>
-      <p class="modal-sub">Log in to your account</p>
+      <img class="modal-logo" src="img/logo_icon_dark.png" alt="" width="56" height="56">
+      <h2 id="loginTitle">Open AgosAlert</h2>
+      <p class="modal-sub" id="loginSub">Log in to report floods and vote on reports, or look around as a guest.</p>
 
-      <label class="field">
-        <span class="ms" aria-hidden="true">alternate_email</span>
-        <input type="text" name="email" placeholder="Email or phone number" autocomplete="username" aria-label="Email or phone number">
-      </label>
-      <label class="field">
-        <span class="ms" aria-hidden="true">lock</span>
-        <input type="password" name="password" id="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
-        <button class="field-btn" type="button" id="togglePassword" aria-label="Show password">
-          <span class="ms" aria-hidden="true">visibility_off</span>
-        </button>
-      </label>
-      <button class="link-btn forgot" type="button" id="forgot">Forgot password?</button>
-
-      <button class="btn btn-primary" type="submit" id="loginSubmit">
-        <span class="btn-label">Log in</span>
-        <span class="ms" aria-hidden="true">arrow_forward</span>
+      <button class="choice choice-main" type="button" data-as="user">
+        <span class="ms" aria-hidden="true" data-i="person_fill"></span>
+        <span class="choice-text"><b>Log in or create an account</b><small>Free. Report floods, vote on reports, save your barangay</small></span>
+        <span class="ms choice-go" aria-hidden="true" data-i="arrow_right"></span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+      <button class="choice" type="button" data-as="guest">
+        <span class="ms" aria-hidden="true" data-i="eye_fill"></span>
+        <span class="choice-text"><b>Look around as a guest</b><small>Weather, map, hotlines, and SOS. No reporting or voting.</small></span>
+        <span class="ms choice-go" aria-hidden="true" data-i="arrow_right"></span>
         <span class="spinner" aria-hidden="true"></span>
       </button>
 
-      <div class="divider"><span>or</span></div>
-
-      <button class="btn btn-outline" type="button" id="googleLogin">
-        <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
-          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
-          <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
-          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/>
-        </svg>
-        Continue with Google
-      </button>
-      <button class="link-btn guest" type="button" id="guestLogin">Continue as guest</button>
-
-      <p class="modal-demo">Demo: just tap Log in, no email or password needed. Nothing is saved or sent.</p>
-    </form>
+      <p class="modal-demo"><span class="ms" aria-hidden="true" data-i="info_circle_fill"></span>Passwords are checked by Supabase and never stored by AgosAlert.</p>
+    </div>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="landing.js" defer></script>
+  <!-- The live 3D Tugak. Loads three.js and his model from the app's
+       folder (app/tugak/, web/tugak/ in the repo), so there's one copy.
+       If it can't (no WebGL, no app folder), the still image stays. -->
+  <script type="module" src="tugak.js"></script>
 </body>
 </html>

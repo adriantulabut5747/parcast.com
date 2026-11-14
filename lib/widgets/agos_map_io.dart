@@ -108,6 +108,8 @@ class _AgosMapState extends State<AgosMap> implements MapBackend {
             : const CameraConstraint.unconstrained(),
         backgroundColor: c.surfaceAlt,
         onMapReady: () => _ready = true,
+        onPositionChanged: (camera, _) =>
+            widget.controller?.center.value = camera.center,
         interactionOptions: InteractionOptions(
           flags: widget.interactive
               ? InteractiveFlag.all & ~InteractiveFlag.rotate
@@ -156,7 +158,7 @@ class _AgosMapState extends State<AgosMap> implements MapBackend {
               ),
               child: Text(
                 AppTileLayer.credits,
-                style: TextStyle(color: c.textSecondary, fontSize: 9),
+                style: TextStyle(color: c.textSecondary, fontSize: 11),
               ),
             ),
           ),
@@ -241,7 +243,7 @@ class _Pin extends StatelessWidget {
                             pin.chip!,
                             style: TextStyle(
                               color: c.textPrimary,
-                              fontSize: 11.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
                             ),
                           ),

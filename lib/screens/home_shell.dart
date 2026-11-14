@@ -3,8 +3,12 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 import '../data/demo_data.dart';
+import '../services/alerts.dart';
+import '../services/auth.dart';
+import '../services/reports.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/map_glass.dart';
@@ -14,7 +18,6 @@ import 'account.dart';
 import 'weather_tab.dart';
 import 'deferred_screens.dart';
 import '../widgets/agos_icons.dart';
-import '../widgets/check_in.dart';
 import '../widgets/my_barangay.dart';
 
 /// Phones only: keeps the phone layout from stretching (wider screens get
@@ -23,7 +26,8 @@ const double kMaxContentWidth = 560;
 
 /// ============================================================
 /// HOME SHELL — top bar + the four tabs + bottom nav
-/// (Weather, Map, Reports, Help; the + lives in the Reports tab)
+/// (Weather, Map, Reports, Help; reporting = the round + on phones,
+/// ReportFab, and a button under Tugak on wider Reports pages)
 /// ============================================================
 class HomeShell extends StatefulWidget {
   /// Which tab opens first (same numbers as HomeShellState._index).
@@ -41,7 +45,8 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => HomeShellState();
 }
 
-class HomeShellState extends State<HomeShell> {
+class HomeShellState extends State<HomeShell>
+    with SingleTickerProviderStateMixin {
   // Which tab is showing right now: 0 Weather, 1 Map, 2 Reports, 3 Help
   // (same order as _tabs and _items below).
   late int _index = widget.initialTab;
@@ -50,6 +55,43 @@ class HomeShellState extends State<HomeShell> {
   // doesn't download tiles until someone opens the Map tab). After that
   // they stay alive, so scroll position and filters are kept.
   late final Set<int> _opened = {_index};
+
+  // ---- Moving between tabs (Apple's "fluid interfaces" rules) ----
+  // _slide = how far the current tab has moved, in page widths: 0 = still,
+  // -1 = all the way out to the left (the next tab is in), +1 = out to the
+  // right. A swipe drives it 1:1 with the finger; a tap or a released
+  // swipe springs it to -1 / 0 / +1. Everything that moves (the pages, the
+  // phone pill, the desktop segmented control) reads this one number, so
+  // they always agree, and any of it can be grabbed again mid-motion.
+  late final AnimationController _slide = AnimationController.unbounded(
+    vsync: this,
+  );
+  int? _to; // the tab coming in (null = no move under way)
+  double _dragRaw = 0; // finger travel in widths, before rubber-banding
+  double _pageWidth = 400;
+
+  // Critically damped (no bounce), response 0.42 s: Apple's page settle.
+  // stiffness = (2π / response)², damping = 4π / response.
+  static const _pageSpring = SpringDescription(
+    mass: 1,
+    stiffness: 224,
+    damping: 29.9,
+  );
+
+  /// Which way [_to] lies: +1 = to the right of the current tab.
+  int get _dir => _to == null ? 0 : (_to! > _index ? 1 : -1);
+
+  /// The live tab position, as a fraction: 1.4 = 40% of the way from Map
+  /// to Reports. Drives both navs.
+  double get _livePage => _to == null
+      ? _index.toDouble()
+      : _index + (_to! - _index) * _slide.value.abs();
+
+  @override
+  void dispose() {
+    _slide.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -74,10 +116,97 @@ class HomeShellState extends State<HomeShell> {
     }
   }
 
-  void switchTab(int index) => setState(() {
-    _index = index;
-    _opened.add(index);
+  /// Moves to [index] with a slide in its direction (taps, links, ?tab=).
+  /// Interruptible: a tap mid-move keeps going from where things are.
+  void switchTab(int index) {
+    if (_to == index) return; // already on its way
+    if (_to == null && index == _index) return;
+    // Mid-move toward somewhere else: settle on whichever tab shows more,
+    // then head for the new one.
+    if (_to != null) {
+      if (_slide.value.abs() >= 0.5) _index = _to!;
+      _slide.value = 0;
+      _to = null;
+      if (index == _index) return setState(() {});
+    }
+    setState(() {
+      _opened.add(index);
+      _to = index;
+    });
+    if (MediaQuery.disableAnimationsOf(context)) return _settle();
+    _springTo(-_dir.toDouble(), 0);
+  }
+
+  void _springTo(double target, double velocity) {
+    _slide
+        .animateWith(
+          SpringSimulation(_pageSpring, _slide.value, target, velocity),
+        )
+        .whenCompleteOrCancel(() {
+          // A spring ends within a hair of its target, never exactly on it.
+          if (mounted &&
+              !_slide.isAnimating &&
+              (_slide.value - target).abs() < 0.01) {
+            _settle();
+          }
+        });
+  }
+
+  // The move is over: the incoming tab becomes the current one (or, if the
+  // swipe was let go early, everything is back where it was).
+  void _settle() => setState(() {
+    if (_to != null && _slide.value.abs() >= 0.5) _index = _to!;
+    _to = null;
+    _slide.value = 0;
   });
+
+  // ---- Swiping (phones). Not on the Map: there a drag pans the map. ----
+  // The scrubber, rain bars and chip rows inside a tab are horizontal drags
+  // too; Flutter gives the touch to the innermost one, so they still win.
+
+  void _dragStart(DragStartDetails _) {
+    _slide.stop(); // grabbed mid-flight: carry on from where it is
+    if (_to != null && _slide.value.abs() >= 0.5) {
+      // The incoming tab is mostly in: it's the current one now.
+      final d = _dir;
+      _index = _to!;
+      _slide.value += d;
+    }
+    _to = null;
+    _dragRaw = _slide.value;
+  }
+
+  void _dragUpdate(DragUpdateDetails d) {
+    _dragRaw += d.primaryDelta! / _pageWidth;
+    final next = _index + (_dragRaw < 0 ? 1 : -1);
+    if (_dragRaw != 0 && next >= 0 && next < _tabs.length) {
+      if (_to != next) setState(() => _opened.add(_to = next));
+      _slide.value = _dragRaw;
+    } else {
+      // Nothing that way: resist more the further it's pulled.
+      if (_to != null) setState(() => _to = null);
+      _slide.value = _rubberBand(_dragRaw);
+    }
+  }
+
+  void _dragEnd(DragEndDetails d) {
+    final v = (d.primaryVelocity ?? 0) / _pageWidth; // widths per second
+    // Where the flick is going, not where the finger let go (Apple's
+    // projection with decelerationRate 0.99: v/1000 · 0.99 / 0.01).
+    final projected = _slide.value + v * 0.099;
+    final target =
+        _to != null &&
+            projected.abs() > 0.5 &&
+            projected.sign == _slide.value.sign
+        ? _slide.value.sign
+        : 0.0;
+    _springTo(target, v); // hand the finger's speed to the spring
+  }
+
+  static double _rubberBand(double x) {
+    const c = 0.55, dim = 1.0; // Apple's constant; dimension = one page
+    return (x * dim * c) / (dim + c * x.abs());
+  }
 
   // Every tab but Weather is downloaded the first time it's opened.
   static final _tabs = [
@@ -92,42 +221,77 @@ class HomeShellState extends State<HomeShell> {
   // `final (outline, filled, label) = _items[i];`.
   static const _items = [
     (CupertinoIcons.cloud_sun, CupertinoIcons.cloud_sun_fill, 'Weather'),
-    (CupertinoIcons.map, CupertinoIcons.map_fill, 'Map'),
+    (AgosIcons.mapPin, AgosIcons.mapPinFill, 'Map'),
     (CupertinoIcons.news, CupertinoIcons.news_solid, 'Reports'),
     (AgosIcons.lifebuoy, AgosIcons.lifebuoyFill, 'Help'),
   ];
 
-  // All opened tabs are stacked on top of each other, and only the active
-  // one is visible (see _TabLayer). This is what keeps each tab's scroll
-  // position when you switch away and come back. ValueKey(i) tells Flutter
-  // which layer is which tab, so it doesn't mix them up when a newly
-  // opened tab gets added to the Stack.
+  // All opened tabs are stacked on top of each other; only the current one
+  // (and, mid-move, the incoming one) is shown (see _TabLayer). This is
+  // what keeps each tab's scroll position when you switch away and come
+  // back. ValueKey(i) tells Flutter which layer is which tab, so it doesn't
+  // mix them up when a newly opened tab gets added to the Stack.
   //
   // [bar] is the top bar's height. Tabs start below it, except the Map:
   // the map runs under the (glass) bar, edge to edge, and gets the bar's
   // height as MediaQuery top padding, so its own buttons start below it.
-  Widget _tabStack(int active, double bar) {
+  //
+  // [pager] (phones): pages sit side by side and slide a full width, and
+  // a swipe moves them. Wider screens: a short directional cross-fade
+  // (a full-width slide is too much travel on a desktop).
+  Widget _tabStack(double bar, {required bool pager}) {
     final mq = MediaQuery.of(context);
-    return Stack(
-      children: [
-        for (var i = 0; i < _tabs.length; i++)
-          if (_opened.contains(i))
-            _TabLayer(
-              key: ValueKey(i),
-              active: i == active,
-              child: i == 1
-                  ? MediaQuery(
-                      data: mq.copyWith(
-                        padding: mq.padding.copyWith(top: mq.padding.top + bar),
-                      ),
-                      child: _tabs[i],
-                    )
-                  : Padding(
-                      padding: EdgeInsets.only(top: bar),
-                      child: _tabs[i],
+    final stack = LayoutBuilder(
+      builder: (context, box) {
+        _pageWidth = box.maxWidth;
+        return AnimatedBuilder(
+          animation: _slide,
+          builder: (context, _) {
+            final o = _slide.value;
+            return Stack(
+              children: [
+                for (var i = 0; i < _tabs.length; i++)
+                  if (_opened.contains(i))
+                    _TabLayer(
+                      key: ValueKey(i),
+                      // Where this tab sits, in page widths (null = hidden).
+                      offset: i == _index
+                          ? o
+                          : i == _to
+                          ? o + _dir
+                          : null,
+                      current: i == _index,
+                      pager: pager,
+                      width: box.maxWidth,
+                      child: i == 1
+                          ? MediaQuery(
+                              data: mq.copyWith(
+                                padding: mq.padding.copyWith(
+                                  top: mq.padding.top + bar,
+                                ),
+                              ),
+                              child: _tabs[i],
+                            )
+                          : Padding(
+                              padding: EdgeInsets.only(top: bar),
+                              child: _tabs[i],
+                            ),
                     ),
-            ),
-      ],
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (!pager) return stack;
+    final canSwipe = _index != 1 || _to != null;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: canSwipe ? _dragStart : null,
+      onHorizontalDragUpdate: canSwipe ? _dragUpdate : null,
+      onHorizontalDragEnd: canSwipe ? _dragEnd : null,
+      onHorizontalDragCancel: canSwipe ? () => _springTo(0, 0) : null,
+      child: stack,
     );
   }
 
@@ -175,7 +339,9 @@ class HomeShellState extends State<HomeShell> {
               constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
               child: Stack(
                 children: [
-                  Positioned.fill(child: _tabStack(_index, _phoneBarHeight)),
+                  Positioned.fill(
+                    child: _tabStack(_phoneBarHeight, pager: true),
+                  ),
                   Positioned(
                     top: 0,
                     left: 0,
@@ -183,6 +349,29 @@ class HomeShellState extends State<HomeShell> {
                     // Phones: only the Map needs a bar background (other
                     // tabs scroll below it on the plain page).
                     child: _barGlass(c, filled: _index == 1, child: _topBar(c)),
+                  ),
+                  // Reports' + (the Map draws its own, next to its sheet).
+                  // It fades and shrinks with the swipe, like the nav.
+                  Positioned(
+                    right: 16,
+                    bottom: 96 + MediaQuery.paddingOf(context).bottom,
+                    child: AnimatedBuilder(
+                      animation: _slide,
+                      builder: (context, child) {
+                        final v = (1 - (_livePage - 2).abs()).clamp(0.0, 1.0);
+                        return IgnorePointer(
+                          ignoring: v < 0.5,
+                          child: Opacity(
+                            opacity: v,
+                            child: Transform.scale(
+                              scale: 0.6 + 0.4 * v,
+                              child: child,
+                            ),
+                          ),
+                        );
+                      },
+                      child: const ReportFab(),
+                    ),
                   ),
                 ],
               ),
@@ -226,7 +415,7 @@ class HomeShellState extends State<HomeShell> {
           bottom: false,
           child: Stack(
             children: [
-              Positioned.fill(child: _tabStack(active, _webBarHeight)),
+              Positioned.fill(child: _tabStack(_webBarHeight, pager: false)),
               Positioned(
                 top: 0,
                 left: 0,
@@ -270,7 +459,7 @@ class HomeShellState extends State<HomeShell> {
               ),
             ),
           ),
-          for (var i = 0; i < 4; i++) _webNavItem(c, i, i == active, compact),
+          _segmentedNav(c, compact),
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -294,51 +483,125 @@ class HomeShellState extends State<HomeShell> {
     );
   }
 
-  Widget _webNavItem(AppColors c, int i, bool selected, bool compact) {
-    final (outline, filled, label) = _items[i];
-    final fg = selected ? c.accent : c.textSecondary;
-    final Widget icon = Icon(selected ? filled : outline, color: fg, size: 20);
-    final item = Material(
-      color: selected
-          ? c.textPrimary.withValues(alpha: c.isDark ? 0.1 : 0.06)
-          : Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        hoverColor: c.textPrimary.withValues(alpha: 0.05),
-        onTap: () => switchTab(i),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 14 : 16,
-            vertical: 10,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              icon,
-              if (!compact) ...[
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: 14,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+  // The tabs as an Apple segmented control: one glass track, and a raised
+  // glass thumb that slides to the open tab. It follows the same live
+  // position as the pages (_livePage), so it moves with the transition;
+  // while travelling it stretches a little toward where it's going and
+  // settles back to its size when it lands (iOS 26's liquid thumb).
+  // Tablets ([compact]) show icons only.
+  Widget _segmentedNav(AppColors c, bool compact) {
+    final seg = compact ? 54.0 : 118.0;
+    const h = 40.0, pad = 3.0, inner = h - 2 * pad;
+    return Container(
+      height: h,
+      padding: const EdgeInsets.all(pad),
+      decoration: BoxDecoration(
+        color: c.isDark
+            ? Colors.white.withValues(alpha: 0.07)
+            : Colors.black.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(h / 2),
+      ),
+      child: AnimatedBuilder(
+        animation: _slide,
+        builder: (context, _) {
+          final p = _livePage;
+          // 0 when resting on a tab, 0.5 halfway between two.
+          final between = (p - p.round()).abs();
+          final w = seg * (1 + 0.22 * between);
+          return SizedBox(
+            width: seg * _tabs.length,
+            height: inner,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: p * seg - (w - seg) / 2,
+                  width: w,
+                  top: 0,
+                  bottom: 0,
+                  child: _segmentThumb(c, inner),
+                ),
+                Positioned.fill(
+                  // Stretch: each segment fills the control's full height,
+                  // so its hover capsule is the thumb's size and shape.
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < _tabs.length; i++)
+                        _segment(
+                          c,
+                          i,
+                          (1 - (i - p).abs()).clamp(0.0, 1.0),
+                          seg,
+                          compact,
+                        ),
+                    ],
                   ),
                 ),
               ],
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: compact ? label : null,
-        child: compact ? Tooltip(message: label, child: item) : item,
+  }
+
+  Widget _segmentThumb(AppColors c, double height) => CustomPaint(
+    foregroundPainter: GlassEdgePainter(radius: height / 2, dark: c.isDark),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: c.isDark
+            ? Colors.white.withValues(alpha: 0.16)
+            : Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(height / 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: c.isDark ? 0.35 : 0.12),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  /// One segment. [s] = how selected it is (0..1), from the live position,
+  /// so the label brightens as the thumb arrives instead of snapping.
+  Widget _segment(AppColors c, int i, double s, double width, bool compact) {
+    final (outline, filled, label) = _items[i];
+    final fg = Color.lerp(c.textSecondary, c.textPrimary, s)!;
+    final content = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(s > 0.5 ? filled : outline, color: fg, size: 18),
+        if (!compact) ...[
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.08,
+            ),
+          ),
+        ],
+      ],
+    );
+    return Semantics(
+      button: true,
+      selected: i == _index,
+      label: label,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: compact ? label : '',
+        child: _HoverTint(
+          radius: 999, // a capsule, same as the thumb
+          enabled: s < 0.5,
+          child: PressableScale(
+            onTap: () => switchTab(i),
+            child: SizedBox(width: width, child: content),
+          ),
+        ),
       ),
     );
   }
@@ -347,12 +610,12 @@ class HomeShellState extends State<HomeShell> {
   // Phone layout
   // ------------------------------------------------------------
 
-  // The bell, with the number of unread alerts. readAlerts (demo_data.dart)
-  // is a ValueNotifier: ValueListenableBuilder rebuilds just this button
-  // when it changes, so the badge updates without rebuilding the shell.
-  Widget _bell(AppColors c) => ValueListenableBuilder<Set<String>>(
-    valueListenable: readAlerts,
-    builder: (context, _, _) => _roundButton(
+  // The bell, with the number of unread alerts (services/alerts.dart).
+  // ListenableBuilder rebuilds just this button when the alerts or the
+  // read-marks change, so the badge updates without rebuilding the shell.
+  Widget _bell(AppColors c) => ListenableBuilder(
+    listenable: Listenable.merge([alerts, readAlerts]),
+    builder: (context, _) => _roundButton(
       c,
       icon: CupertinoIcons.bell,
       tooltip: 'Notifications',
@@ -389,7 +652,7 @@ class HomeShellState extends State<HomeShell> {
                   'AGOSALERT',
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontSize: 18,
+                    fontSize: 17,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -467,7 +730,7 @@ class HomeShellState extends State<HomeShell> {
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 9,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -490,52 +753,56 @@ class HomeShellState extends State<HomeShell> {
   static const _navInset = 6.0; // gap between the pill's edge and the tabs
 
   Widget _bottomNav(AppColors c) {
-    // p slides from the old tab number to the new one (on a spring), and
-    // every tab's "how open am I" (0..1) comes from it, so width, highlight,
-    // icon size and label all move together, and the tab widths always add
-    // up to the pill's width.
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: _index.toDouble()),
-      duration: const Duration(milliseconds: 450),
-      curve: kSnappyCurve,
-      builder: (context, p, _) => LayoutBuilder(
-        builder: (context, box) {
-          final n = _tabs.length;
-          final unit = (box.maxWidth - _navInset * 2) / (n + _navGrow);
-          double open(int i) => (1 - (i - p).abs()).clamp(0.0, 1.0);
-          return SizedBox(
-            height: _navHeight,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(child: _navGlass(c)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: _navInset),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var i = 0; i < n; i++)
-                        // The last tab takes what's left, so rounding never
-                        // makes the row a hair too wide.
-                        i == n - 1
-                            ? Expanded(child: _navTab(c, i, open(i)))
-                            : SizedBox(
-                                width: unit * (1 + _navGrow * open(i)),
-                                child: _navTab(c, i, open(i)),
-                              ),
-                    ],
+    // p = the live tab position (see _livePage): it follows a swipe 1:1 and
+    // springs with a tap, and every tab's "how open am I" (0..1) comes
+    // from it, so width, highlight, icon size and label all move together,
+    // and the tab widths always add up to the pill's width.
+    return AnimatedBuilder(
+      animation: _slide,
+      builder: (context, _) {
+        final p = _livePage;
+        return LayoutBuilder(
+          builder: (context, box) {
+            final n = _tabs.length;
+            final unit = (box.maxWidth - _navInset * 2) / (n + _navGrow);
+            double open(int i) => (1 - (i - p).abs()).clamp(0.0, 1.0);
+            return SizedBox(
+              height: _navHeight,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(child: _navGlass(c)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: _navInset),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < n; i++)
+                          // The last tab takes what's left, so rounding never
+                          // makes the row a hair too wide.
+                          i == n - 1
+                              ? Expanded(child: _navTab(c, i, open(i)))
+                              : SizedBox(
+                                  width: unit * (1 + _navGrow * open(i)),
+                                  child: _navTab(c, i, open(i)),
+                                ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
   // The pill: frosted glass with the lit edge. It's clipped (the blur
   // needs that), so it sits UNDER the tabs, whose icons may stick out.
+  // Nearly solid (Nov 14 2026, Adrian: at 62% the page's text read
+  // through it and mixed with the tabs; the blur alone can't be trusted
+  // on the web, e.g. next to Tugak's 3D stage, a separate HTML layer).
   Widget _navGlass(AppColors c) => ClipRRect(
     borderRadius: BorderRadius.circular(28),
     child: BackdropFilter(
@@ -544,7 +811,7 @@ class HomeShellState extends State<HomeShell> {
         foregroundPainter: GlassEdgePainter(radius: 28, dark: c.isDark),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: c.surface.withValues(alpha: c.isDark ? 0.62 : 0.78),
+            color: c.surface.withValues(alpha: c.isDark ? 0.92 : 0.94),
             borderRadius: BorderRadius.circular(28),
           ),
         ),
@@ -601,7 +868,7 @@ class HomeShellState extends State<HomeShell> {
                           style: TextStyle(
                             fontFamily: kFontFamily,
                             color: c.textPrimary,
-                            fontSize: 11.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                             height: 1,
                           ),
@@ -636,53 +903,6 @@ class HomeShellState extends State<HomeShell> {
   }
 }
 
-/// The + (report a flood, "I'm safe", SOS). Lives in the Reports tab's
-/// header since the nav became four tabs.
-class NewActionsButton extends StatelessWidget {
-  final double size;
-  const NewActionsButton({this.size = 44, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors(context);
-    return Tooltip(
-      message: 'Report, I\'m safe, SOS',
-      child: Semantics(
-        button: true,
-        label: 'New: report a flood, I\'m safe, or SOS',
-        child: PressableScale(
-          onTap: () => showNewActions(context),
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF3D9BFF), kBlue],
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-              boxShadow: [
-                BoxShadow(
-                  color: kBlue.withValues(alpha: c.isDark ? 0.35 : 0.3),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Icon(
-              CupertinoIcons.plus,
-              color: Colors.white,
-              size: size * 0.46,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// The avatar button at the top right (every screen size). It opens a
 /// dropdown: profile and votes, your barangay, dark mode, Settings, Help,
 /// About, and Log out (or Log in, for guests).
@@ -705,7 +925,7 @@ class _ProfileMenu extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       textStyle: const TextStyle(
         fontFamily: kFontFamily,
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -745,10 +965,10 @@ class _ProfileMenu extends StatelessWidget {
                   if (!compact) ...[
                     const SizedBox(width: 10),
                     Text(
-                      isGuest ? 'Guest' : kDemoUserName,
+                      isGuest ? 'Guest' : me!.fullName,
                       style: TextStyle(
                         color: c.textPrimary,
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -857,7 +1077,7 @@ class _ProfileMenu extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isGuest ? 'Guest' : kDemoUserName,
+                        isGuest ? 'Guest' : me!.fullName,
                         style: TextStyle(
                           color: c.textPrimary,
                           fontSize: 15,
@@ -865,12 +1085,9 @@ class _ProfileMenu extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        isGuest ? 'Browsing as a guest' : kDemoUserEmail,
+                        isGuest ? 'Browsing as a guest' : me!.email,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12.5,
-                        ),
+                        style: TextStyle(color: c.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
@@ -890,63 +1107,59 @@ class _ProfileMenu extends StatelessWidget {
                       'Guests can only view. Log in to vote and upload.',
                       style: TextStyle(
                         color: c.textSecondary,
-                        fontSize: 12.5,
+                        fontSize: 13,
                         height: 1.4,
                       ),
                     )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                  // Real counts from report_votes, on the user's active
+                  // reports (reports and their votes go after 14 days).
+                  : ValueListenableBuilder(
+                      valueListenable: floodReports,
+                      builder: (context, reports, _) {
+                        final mine = reports.where((r) => r.mine);
+                        Widget count(IconData icon, int n) => Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded(
-                              child: Text(
-                                'Votes on your uploads',
-                                style: TextStyle(
-                                  color: c.textSecondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                            Icon(icon, size: 16, color: c.textSecondary),
+                            const SizedBox(width: 6),
+                            Text(
+                              '$n',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        );
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Votes on your uploads',
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                count(
+                                  CupertinoIcons.hand_thumbsup_fill,
+                                  mine.fold(0, (n, r) => n + r.upVotes),
                                 ),
-                              ),
-                            ),
-                            const SampleBadge(),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(
-                              CupertinoIcons.hand_thumbsup_fill,
-                              size: 16,
-                              color: kSafe,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '$kMyUpVotesReceived',
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(width: 18),
-                            const Icon(
-                              CupertinoIcons.hand_thumbsdown_fill,
-                              size: 16,
-                              color: kDanger,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '$kMyDownVotesReceived',
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                              ),
+                                const SizedBox(width: 18),
+                                count(
+                                  CupertinoIcons.hand_thumbsdown_fill,
+                                  mine.fold(0, (n, r) => n + r.downVotes),
+                                ),
+                              ],
                             ),
                           ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
             ),
           ],
@@ -984,7 +1197,7 @@ class _Avatar extends StatelessWidget {
               size: size * 0.6,
             )
           : Text(
-              kDemoUserInitials,
+              me!.initials,
               style: TextStyle(
                 color: Colors.white,
                 fontSize: size * 0.36,
@@ -995,39 +1208,48 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-/// One tab in the shell. The active tab fades and slides in; hidden tabs
-/// are invisible, can't be tapped, and pause their animations.
+/// One tab in the shell. [offset] = where it sits, in page widths (0 = in
+/// place, -1 = one page to the left); null = hidden. Hidden tabs stay in
+/// the tree (so they keep their state) but are invisible, can't be tapped,
+/// and pause their animations.
 class _TabLayer extends StatelessWidget {
-  final bool active;
+  final double? offset;
+  final bool current;
+  final bool pager;
+  final double width;
   final Widget child;
-  const _TabLayer({required this.active, required this.child, super.key});
+  const _TabLayer({
+    required this.offset,
+    required this.current,
+    required this.pager,
+    required this.width,
+    required this.child,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const duration = Duration(milliseconds: 280);
-    // For a hidden tab (active == false):
-    //   IgnorePointer    -> taps pass through it (it's invisible but still
-    //                       in the Stack, so otherwise it would block taps).
-    //   ExcludeSemantics -> screen readers skip it.
-    //   opacity 0        -> invisible.
-    //   Offset(0, 0.02)  -> sits 2% lower, so when it becomes active it
-    //                       slides up into place while fading in.
+    final o = offset;
+    final shown = o != null && o.abs() < 1;
+    // Phones: a real pager, pages side by side, full width. Wider screens:
+    // the page drifts 64 px in its direction while cross-fading.
+    final dx = o == null ? 0.0 : (pager ? o * width : o * 64);
+    final opacity = !shown
+        ? 0.0
+        : (pager ? 1.0 : (1 - o.abs()).clamp(0.0, 1.0));
     return IgnorePointer(
-      ignoring: !active,
+      // Only the current tab takes taps, even mid-move (so it can be
+      // grabbed again); the incoming one waits until it's settled.
+      ignoring: !current,
       child: ExcludeSemantics(
-        excluding: !active,
-        child: AnimatedOpacity(
-          opacity: active ? 1 : 0,
-          duration: duration,
-          curve: Curves.easeOut,
-          child: AnimatedSlide(
-            offset: active ? Offset.zero : const Offset(0, 0.02),
-            duration: duration,
-            curve: Curves.easeOutCubic,
-            // Pause only the tab's own animations. TickerMode must stay
-            // INSIDE the fade: wrapped around it, it also froze the
-            // fade-out, so old tabs stayed visible on top of each other.
-            child: TickerMode(enabled: active, child: child),
+        excluding: !current,
+        child: Opacity(
+          opacity: opacity,
+          child: Transform.translate(
+            offset: Offset(dx, 0),
+            // Pause hidden tabs' animations (and tell the web map it's
+            // hidden, see agos_map_web.dart).
+            child: TickerMode(enabled: shown, child: child),
           ),
         ),
       ),
@@ -1035,146 +1257,42 @@ class _TabLayer extends StatelessWidget {
   }
 }
 
-/// The + button's actions: Report flood, I'm safe, SOS. They pop up from
-/// the button in a fan (phones) or under it (wider screens), over a dark
-/// backdrop; tap outside or the x to close. [context] must be inside
-/// HomeShell, so the actions can open their screens.
-void showNewActions(BuildContext context) {
-  final wide = isWideScreen(context);
-  showGeneralDialog(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'Close',
-    barrierColor: Colors.black.withValues(alpha: 0.65),
-    transitionDuration: const Duration(milliseconds: 380),
-    pageBuilder: (dialog, _, _) {
-      void run(void Function(BuildContext) action) {
-        Navigator.of(dialog).pop();
-        action(context);
-      }
+/// A soft highlight while the mouse is over [child] (desktop hover, like
+/// macOS toolbar buttons). [enabled] false = no highlight (e.g. the
+/// selected segment, which already has the thumb).
+class _HoverTint extends StatefulWidget {
+  final Widget child;
+  final double radius;
+  final bool enabled;
+  const _HoverTint({
+    required this.child,
+    required this.radius,
+    this.enabled = true,
+  });
 
-      final actions = [
-        (AgosIcons.flood, 'Report flood', kBlue, () => run(openReportIncident)),
-        (
-          CupertinoIcons.checkmark_shield_fill,
-          'I\'m safe',
-          kSafe,
-          () => run(showImSafe),
-        ),
-        (
-          CupertinoIcons.exclamationmark_triangle_fill,
-          'SOS',
-          kDanger,
-          () => run(openSos),
-        ),
-      ];
-      // Each button rises and fades in a little after the one before.
-      Widget button(int i) {
-        final (icon, label, color, onTap) = actions[i];
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: Duration(milliseconds: 420 + i * 90),
-          curve: kBouncyCurve,
-          builder: (context, v, child) => Opacity(
-            opacity: v.clamp(0.0, 1.0),
-            child: Transform.translate(
-              offset: Offset(0, 30 * (1 - v)),
-              child: child,
-            ),
-          ),
-          child: Semantics(
-            button: true,
-            label: label,
-            child: PressableScale(
-              onTap: onTap,
-              child: SizedBox(
-                width: 92,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: i == 2 ? kDanger : const Color(0xFF232326),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.14),
-                        ),
-                      ),
-                      child: Icon(
-                        icon,
-                        color: i == 2 ? Colors.white : color,
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }
+  @override
+  State<_HoverTint> createState() => _HoverTintState();
+}
 
-      final row = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [button(0), button(1), button(2)],
-      );
-      final close = Semantics(
-        button: true,
-        label: 'Close',
-        child: PressableScale(
-          onTap: () => Navigator.of(dialog).pop(),
-          child: Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xFF2C2C30),
-            ),
-            child: const Icon(
-              CupertinoIcons.xmark,
-              color: Colors.white,
-              size: 22,
-            ),
+class _HoverTintState extends State<_HoverTint> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors(context);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        decoration: BoxDecoration(
+          color: c.textPrimary.withValues(
+            alpha: _hover && widget.enabled ? 0.06 : 0,
           ),
+          borderRadius: BorderRadius.circular(widget.radius),
         ),
-      );
-      // Material gives the labels the app's text style (without it,
-      // Flutter marks bare text with a yellow underline).
-      return Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          child: wide
-              ? Align(
-                  alignment: Alignment.topRight,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 76, 120, 0),
-                    child: row,
-                  ),
-                )
-              : Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    // The x lands where the + was (the nav's middle).
-                    padding: const EdgeInsets.only(bottom: 12 + 68 - 42),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [row, const SizedBox(height: 22), close],
-                    ),
-                  ),
-                ),
-        ),
-      );
-    },
-  );
+        child: widget.child,
+      ),
+    );
+  }
 }

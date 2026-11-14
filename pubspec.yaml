@@ -41,6 +41,9 @@ dependencies:
   cupertino_icons: ^2.0.0
   web: ^1.1.2
   shared_preferences: ^2.5.6
+  supabase_flutter: ^2.18.3
+  exif: ^3.3.0
+  geolocator: ^14.1.2
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +69,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/tugak/
 
   fonts:
     - family: Inter
@@ -77,16 +81,21 @@ flutter:
           weight: 700
         - asset: assets/fonts/Inter-ExtraBold.ttf
           weight: 800
-    # Titles and big numbers (theme.dart kDisplayFont). Latin-only static
-    # cuts of Inter Tight (OFL), made from Google Fonts' variable file with
-    # fontTools (instancer + pyftsubset), like Inter above.
-    - family: InterTight
+    # Titles and big numbers (theme.dart kDisplayFont): Inter Display, the
+    # optical size Inter draws for large type (opsz 32), the open-licence
+    # match for SF Pro Display. Latin-only static cuts (OFL, same licence
+    # file as Inter) made from Google Fonts' Inter[opsz,wght] with fontTools
+    # (instancer opsz=32 + subset).
+    - family: InterDisplay
       fonts:
-        - asset: assets/fonts/InterTight-SemiBold.ttf
+        # Light: only the big weather numbers (Apple Weather's thin numerals).
+        - asset: assets/fonts/InterDisplay-Light.ttf
+          weight: 300
+        - asset: assets/fonts/InterDisplay-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/InterTight-Bold.ttf
+        - asset: assets/fonts/InterDisplay-Bold.ttf
           weight: 700
-        - asset: assets/fonts/InterTight-ExtraBold.ttf
+        - asset: assets/fonts/InterDisplay-ExtraBold.ttf
           weight: 800
     # Our own flood icons (flood, waves, lifebuoy, boat, landslide), made
     # by tools/make_icons.py. Everything else is CupertinoIcons.

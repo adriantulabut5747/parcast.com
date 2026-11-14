@@ -7,7 +7,7 @@ import '../widgets/common.dart';
 import '../widgets/links.dart';
 
 /// ============================================================
-/// EVACUATION CENTERS — list with capacity and directions
+/// EVACUATION CENTERS — list with status, distance and directions
 /// ============================================================
 class EvacuationCentersScreen extends StatefulWidget {
   const EvacuationCentersScreen({super.key});
@@ -30,11 +30,8 @@ class _EvacuationCentersScreenState extends State<EvacuationCentersScreen> {
       ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
     final shown = _openOnly ? centers.where((e) => e.open).toList() : centers;
     final openCount = centers.where((e) => e.open).length;
-    // Free spaces across all open centers. fold starts at 0 and adds each
-    // center's (capacity - occupants), like a running total.
-    final spaces = centers
-        .where((e) => e.open)
-        .fold<int>(0, (sum, e) => sum + e.capacity - e.occupants);
+    // The closest open one (the list is sorted nearest first).
+    final nearest = centers.where((e) => e.open).firstOrNull;
 
     return SubpageScaffold(
       title: 'Evacuation centers',
@@ -51,7 +48,7 @@ class _EvacuationCentersScreenState extends State<EvacuationCentersScreen> {
                       c,
                       '$openCount',
                       'Open now',
-                      kSafe,
+                      kShelter,
                       CupertinoIcons.checkmark_circle_fill,
                     ),
                   ),
@@ -59,10 +56,10 @@ class _EvacuationCentersScreenState extends State<EvacuationCentersScreen> {
                   Expanded(
                     child: _summary(
                       c,
-                      '$spaces',
-                      'Spaces left',
+                      nearest == null ? '–' : '${nearest.distanceKm} km',
+                      'Nearest open',
                       kBlue,
-                      CupertinoIcons.person_3_fill,
+                      CupertinoIcons.location_fill,
                     ),
                   ),
                 ],
@@ -129,7 +126,7 @@ class _EvacuationCentersScreenState extends State<EvacuationCentersScreen> {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                  style: TextStyle(color: c.textSecondary, fontSize: 12),
                 ),
               ],
             ),
@@ -150,11 +147,6 @@ class EvacCenterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColors(context);
     final e = center;
-    final fillColor = e.fill >= 0.85
-        ? kDanger
-        : e.fill >= 0.6
-        ? kCaution
-        : kSafe;
     return AppCard(
       padding: EdgeInsets.zero,
       onTap: () => openDirections(context, e.point),
@@ -198,7 +190,7 @@ class EvacCenterCard extends StatelessWidget {
                     left: 10,
                     child: StatusPill(
                       e.open ? 'Open' : 'Standby',
-                      e.open ? kSafe : const Color(0xFF94A3B8),
+                      e.open ? kShelter : const Color(0xFF94A3B8),
                       solid: true,
                     ),
                   ),
@@ -218,7 +210,7 @@ class EvacCenterCard extends StatelessWidget {
                         '${e.distanceKm} km',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 10.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -246,24 +238,14 @@ class EvacCenterCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'Brgy. ${e.barangay}',
-                  style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                  style: TextStyle(color: c.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: e.fill,
-                    minHeight: 6,
-                    backgroundColor: c.surfaceAlt,
-                    valueColor: AlwaysStoppedAnimation(fillColor),
-                  ),
-                ),
-                const SizedBox(height: 6),
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        '${e.occupants} / ${e.capacity} people',
+                        e.open ? 'Open now' : 'Standby, not open yet',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: c.textSecondary, fontSize: 11),

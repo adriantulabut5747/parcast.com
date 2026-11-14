@@ -88,10 +88,12 @@ def g_waves():
 
 
 def g_flood():
-    # A house up to its walls in water: roof, two walls, two waves.
-    house = polyline((3.2, 11.2), (12, 3.2), (20.8, 11.2)) + polyline((6.4, 8.6), (6.4, 13.8)) + polyline((17.6, 8.6), (17.6, 13.8))
-    water = wave(2.5, 21.5, 16.6, 1.0, 3) + wave(2.5, 21.5, 20.8, 1.0, 3)
-    return house + water, []
+    # A house standing in water: roof with eaves, walls that vanish into the
+    # first wave, a door half under water, a second wave below.
+    house = polyline((3.4, 10.6), (12, 3.4), (20.6, 10.6)) + polyline((6.2, 8.6), (6.2, 14.0)) + polyline((17.8, 8.6), (17.8, 14.0))
+    door = polyline((10.2, 14.0), (10.2, 10.6), (13.8, 10.6), (13.8, 14.0))
+    water = wave(2.5, 21.5, 16.4, 1.0, 3) + wave(2.5, 21.5, 20.6, 1.0, 3)
+    return house + door + water, []
 
 
 LB = (12, 12, 9.4, 4.6)  # lifebuoy: center, outer radius, inner radius
@@ -114,11 +116,16 @@ def g_lifebuoy_fill():
 
 
 def g_boat():
-    # Rescue boat: solid hull (stroked too, for round corners; it sits in
-    # lists next to filled Cupertino icons), cabin with a slanted
-    # windshield, water line.
-    hull = polyline((2.6, 12.6), (21.4, 12.6), (18.4, 17.4), (5.6, 17.4), closed=True)
-    cabin = polyline((7.6, 12.6), (7.6, 7.4), (13.2, 7.4), (15.6, 12.6))
+    # Rescue boat seen from the side: solid hull (stroked too, for round
+    # corners; it sits in lists next to filled Cupertino icons) whose bow
+    # rises to the right as if moving, a cabin with a slanted windshield,
+    # a waterline below.
+    hull = [[
+        ('M', 2.8, 12.2), ('L', 21.2, 10.4),
+        ('C', 20.6, 14.2, 18.8, 17.2, 15.8, 17.2),
+        ('L', 6.0, 17.2), ('C', 4.2, 17.2, 3.2, 15.2, 2.8, 12.2), ('Z',),
+    ]]
+    cabin = polyline((6.6, 11.8), (6.6, 7.0), (12.6, 7.0), (15.4, 11.1))
     return hull + cabin + wave(2.5, 21.5, 21, 0.95, 3), hull
 
 
@@ -126,10 +133,71 @@ def g_landslide():
     # A rounded hill whose right side has broken off: the side stops in
     # mid-air and rocks tumble down to the ground. The open side and the
     # round top keep it from reading as a warning triangle.
-    hill = [[('M', 2.6, 20.6), ('C', 4.6, 14.6, 6.6, 5.6, 9.8, 5.6), ('C', 11.8, 5.6, 12.7, 8.4, 13.6, 11.4)]]
+    # The break is a jagged scar (not a smooth curve), so it reads as torn
+    # earth; three rocks of falling size roll away down the right.
+    hill = [[('M', 2.6, 20.6), ('C', 4.4, 14.8, 6.2, 5.4, 9.6, 5.4), ('C', 11.0, 5.4, 11.8, 6.4, 12.4, 7.6),
+             ('L', 11.4, 9.6), ('L', 13.4, 11.2), ('L', 12.6, 13.4)]]
     ground = polyline((2.6, 20.6), (21.4, 20.6))
-    rocks = circle(16.6, 14.0, 1.75) + circle(19.8, 17.3, 1.5) + circle(15.4, 18.0, 1.15)
+    rocks = circle(16.2, 12.6, 1.8) + circle(19.6, 16.4, 1.45) + circle(15.2, 17.8, 1.15)
     return hill + ground, rocks
+
+
+def _pin():
+    # A map pin (round head, point down) floating over a flat ground
+    # ellipse: SF Symbols' "mappin.and.ellipse" idea, drawn in our weight.
+    return [[
+        ('M', 12, 17.0),
+        ('C', 10.9, 15.5, 6.8, 12.2, 6.8, 8.6),
+        ('C', 6.8, 5.7, 9.1, 3.4, 12, 3.4),
+        ('C', 14.9, 3.4, 17.2, 5.7, 17.2, 8.6),
+        ('C', 17.2, 12.2, 13.1, 15.5, 12, 17.0),
+        ('Z',),
+    ]]
+
+
+def _ground():
+    # The ellipse the pin stands over (flat circle, squashed).
+    k = 0.5523
+    cx, cy, rx, ry = 12, 19.7, 6.6, 1.7
+    return [[
+        ('M', cx + rx, cy),
+        ('C', cx + rx, cy + ry * k, cx + rx * k, cy + ry, cx, cy + ry),
+        ('C', cx - rx * k, cy + ry, cx - rx, cy + ry * k, cx - rx, cy),
+        ('C', cx - rx, cy - ry * k, cx - rx * k, cy - ry, cx, cy - ry),
+        ('C', cx + rx * k, cy - ry, cx + rx, cy - ry * k, cx + rx, cy),
+        ('Z',),
+    ]]
+
+
+def g_map_pin():
+    return _pin() + circle(12, 8.6, 1.9) + _ground(), []
+
+
+def g_map_pin_fill():
+    # Solid pin with the dot cut out (third item = holes).
+    return _ground(), _pin(), circle(12, 8.6, 2.0)
+
+
+def rrect(x0, y0, x1, y1, r):
+    k = r * K
+    return [[
+        ('M', x0 + r, y0), ('L', x1 - r, y0), ('C', x1 - r + k, y0, x1, y0 + r - k, x1, y0 + r),
+        ('L', x1, y1 - r), ('C', x1, y1 - r + k, x1 - r + k, y1, x1 - r, y1),
+        ('L', x0 + r, y1), ('C', x0 + r - k, y1, x0, y1 - r + k, x0, y1 - r),
+        ('L', x0, y0 + r), ('C', x0, y0 + r - k, x0 + r - k, y0, x0 + r, y0), ('Z',),
+    ]]
+
+
+def g_road_block():
+    # A road barricade (sawhorse): a solid board with three diagonal
+    # stripes cut out, two splayed legs, a warning lamp on top. Solid, so
+    # it reads as a white glyph inside a 34 px map pin.
+    board = rrect(2.6, 7.0, 21.4, 12.8, 1.3)
+    legs = polyline((6.4, 12.8), (5.0, 20.4)) + polyline((17.6, 12.8), (19.0, 20.4))
+    feet = polyline((3.4, 20.4), (6.6, 20.4)) + polyline((17.4, 20.4), (20.6, 20.4))
+    lamp = circle(12, 4.4, 1.5)
+    stripes = [polyline((x, 12.8), (x + 2.0, 12.8), (x + 4.6, 7.0), (x + 2.6, 7.0), closed=True)[0] for x in (4.4, 9.9, 15.4)]
+    return legs + feet, board + lamp, stripes
 
 
 GLYPHS = {
@@ -139,6 +207,9 @@ GLYPHS = {
     'lifebuoyFill': g_lifebuoy_fill,
     'boat': g_boat,
     'landslide': g_landslide,
+    'mapPin': g_map_pin,
+    'mapPinFill': g_map_pin_fill,
+    'roadBlock': g_road_block,  # new glyphs go last so older code points stay put
 }
 
 DOCS = {
@@ -148,6 +219,9 @@ DOCS = {
     'lifebuoyFill': 'Assistance (filled bands, for the selected tab).',
     'boat': 'Rescue boat.',
     'landslide': 'Landslide: a slope breaking off into rocks.',
+    'mapPin': 'Map (outline): a pin over the ground, for the closed Map tab.',
+    'mapPinFill': 'Map (filled), for the open Map tab.',
+    'roadBlock': 'Blocked road: a striped road barricade.',
 }
 
 
@@ -173,7 +247,10 @@ def to_path(contours):
 
 
 def outline(name):
-    stroked, filled = GLYPHS[name]()
+    # A glyph returns (stroked, filled) or (stroked, filled, holes); holes
+    # are cut out of everything else at the end.
+    stroked, filled, *rest = GLYPHS[name]()
+    holes = rest[0] if rest else []
     result = pathops.Path()
     for shape in stroked:
         p = to_path([shape])
@@ -182,6 +259,8 @@ def outline(name):
         result = pathops.op(result, p, pathops.PathOp.UNION)
     for shape in filled:
         result = pathops.op(result, to_path([shape]), pathops.PathOp.UNION)
+    for shape in holes:
+        result = pathops.op(result, to_path([shape]), pathops.PathOp.DIFFERENCE)
     return result
 
 

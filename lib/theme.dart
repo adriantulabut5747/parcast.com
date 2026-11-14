@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
@@ -8,9 +10,17 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
 const String kFontFamily = 'Inter'; // body text
-// Titles, big numbers, tab names: Inter Tight (narrower, punchier cut of
-// Inter). Use it with `fontFamily: kDisplayFont` on headings only.
-const String kDisplayFont = 'InterTight';
+// Titles and big numbers: Inter Display, the optical size Inter draws for
+// large type (the open-licence match for SF Pro Display; SF itself may
+// not ship in a web app). Use it with `fontFamily: kDisplayFont` on
+// headings and big numbers only, with [displayTracking].
+const String kDisplayFont = 'InterDisplay';
+
+/// Apple-style size-specific tracking (letter spacing) for display text:
+/// big type gets slightly tighter, never crushed. This is Inter's own
+/// "dynamic metrics" curve: -0.0223 + 0.185 * e^(-0.1745 * size) em.
+double displayTracking(double size) =>
+    size * (-0.0223 + 0.185 * math.exp(-0.1745 * size));
 
 // Palette "Graphite" (Nov 2026 redesign): warm graphite instead of pure
 // black, iOS blue as the accent, plus a few iOS tile colors for icons in
@@ -28,20 +38,29 @@ const Color kTileTeal = Color(0xFF32ADE6);
 const Color kTilePurple = Color(0xFFAF52DE);
 const Color kTileGray = Color(0xFF8E8E93);
 
-// Status colors (same in both themes)
-const Color kSafe = Color(0xFF22C55E);
-const Color kCaution = Color(0xFFF59E0B);
-const Color kDanger = Color(0xFFEF4444);
+// Open evacuation centers on the map and in its lists: indigo, so a
+// shelter pin never reads as a green "safe / dry" flood zone next to it.
+const Color kShelter = kTileIndigo;
 
-// Dark theme (the default): warm graphite, not pure black, so the page
-// feels deep instead of empty.
-const Color kBgDark = Color(0xFF111113);
-const Color kSurfaceDark = Color(0xFF1E1E21); // sheets, menus (opaque)
+// Status colors (same in both themes): Apple's system green, orange and
+// red (their dark-mode values, which stay vivid on light pages too).
+const Color kSafe = Color(0xFF30D158);
+const Color kCaution = Color(0xFFFF9F0A);
+const Color kDanger = Color(0xFFFF453A);
+
+// Dark theme (the default): the landing page's night (Nov 14 2026, Adrian
+// wanted the app to match it): near-black navy, with the sky glows and
+// still stars drawn by PageBackground. Same values as landing.css --page /
+// --surface-solid.
+const Color kBgDark = Color(0xFF05060C);
+const Color kSurfaceDark = Color(0xFF14151D); // sheets, menus (opaque)
 const Color kTextPrimaryDark = Color(0xFFF5F5F7);
 const Color kTextSecondaryDark = Color(0xFF9A9AA1);
 
-// Light theme: warm off-white page with white cards.
-const Color kBgLight = Color(0xFFF4F3F0);
+// Light theme: a cool neutral page (iOS's grouped gray) with solid white
+// cards. Nov 14 2026: the warm off-white + blue glows read as a muddy
+// lavender-gray, and see-through cards went gray at the bottom (Adrian).
+const Color kBgLight = Color(0xFFF2F3F6);
 const Color kSurfaceLight = Color(0xFFFFFFFF);
 const Color kTextPrimaryLight = kInk;
 const Color kTextSecondaryLight = Color(0xFF6E6E73);
@@ -73,6 +92,19 @@ class AppColors {
   Color get shadow => Colors.black.withValues(alpha: isDark ? 0.4 : 0.06);
   // Darker blue on white, so small blue text stays readable (4.5:1).
   Color get accent => isDark ? kBlue : const Color(0xFF0066CC);
+
+  /// A risk color used as TEXT. On light pages the system green / orange
+  /// / red are too pale to read (about 2:1 on white), so this swaps in
+  /// Apple's accessible variants; fills (dots, bars, pins) keep the
+  /// bright ones.
+  Color readable(Color risk) {
+    if (isDark) return risk;
+    if (risk == kSafe) return const Color(0xFF248A3D);
+    if (risk == kCaution) return const Color(0xFFC93400);
+    if (risk == kDanger) return const Color(0xFFD70015);
+    return risk;
+  }
+
   // Main buttons: white on black, black on white (like deckai / Apple).
   Color get inverse => isDark ? Colors.white : kInk;
   Color get onInverse => isDark ? Colors.black : Colors.white;

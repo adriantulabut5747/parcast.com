@@ -11,7 +11,7 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AgosAlert: live weather, flood outlook, and emergency help for Mabalacat City, Pampanga.">
-  <meta name="theme-color" content="#111113">
+  <meta name="theme-color" content="#05060C">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -42,15 +42,17 @@
   <link rel="preload" href="assets/assets/fonts/Inter-SemiBold.ttf" as="fetch" crossorigin>
   <link rel="preload" href="assets/assets/fonts/Inter-Bold.ttf" as="fetch" crossorigin>
   <link rel="preload" href="assets/assets/fonts/Inter-ExtraBold.ttf" as="fetch" crossorigin>
-  <link rel="preload" href="assets/assets/fonts/InterTight-Bold.ttf" as="fetch" crossorigin>
-  <link rel="preload" href="assets/assets/fonts/InterTight-ExtraBold.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/InterDisplay-Bold.ttf" as="fetch" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/InterDisplay-ExtraBold.ttf" as="fetch" crossorigin>
 
   <title>AgosAlert · Mabalacat City</title>
   <link rel="manifest" href="manifest.json">
 
   <!--
-    LOADING SCREEN: the logo (white circle + black drop), and the drop
-    fills with blue water as the app loads. Plain HTML/CSS, so it shows
+    LOADING SCREEN: the app icon (the A with its wave), and the A fills with
+    blue water from the bottom as the app loads (the water is clipped to
+    the A's shape). The mark's paths between LOGO:START / LOGO:END are
+    written by tools/make_logo.py; don't edit them by hand. Plain HTML/CSS, so it shows
     instantly while Flutter downloads. flutter_bootstrap.js raises the water
     at each loading step and fades this out once the app has drawn its
     first frame. Follows ?theme=light (set by the landing page).
@@ -63,8 +65,8 @@
       src: url('assets/assets/fonts/Inter-ExtraBold.ttf'); }
     @font-face { font-family: Inter; font-weight: 400; font-display: block;
       src: url('assets/assets/fonts/Inter-Regular.ttf'); }
-    :root { --bg: #111113; --text: #F5F5F7; --muted: #9A9AA1; --line: rgba(255,255,255,.14); }
-    :root.light { --bg: #F4F3F0; --text: #1D1D1F; --muted: #6E6E73; --line: rgba(0,0,0,.1); }
+    :root { --bg: #05060C; --text: #F5F5F7; --muted: #9A9AA1; --line: rgba(255,255,255,.14); }
+    :root.light { --bg: #F2F3F6; --text: #1D1D1F; --muted: #6E6E73; --line: rgba(0,0,0,.1); }
     html, body { margin: 0; height: 100%; background: var(--bg); }
 
     #loader {
@@ -75,6 +77,15 @@
       transition: opacity .5s ease, visibility .5s ease;
     }
     #loader.done { opacity: 0; visibility: hidden; }
+    /* Dark: the landing page's night sky (landing.css .sky), stars drawn once, still. */
+    :root:not(.light) #loader {
+      background:
+        radial-gradient(ellipse 70% 55% at 78% -5%, rgba(28, 61, 114, .55), transparent 70%),
+        radial-gradient(ellipse 60% 50% at -5% 105%, rgba(22, 25, 74, .55), transparent 70%),
+        linear-gradient(180deg, #070a1c 0%, var(--bg) 60%);
+    }
+    .stars { position: absolute; left: 0; top: 0; width: 1px; height: 1px; border-radius: 50%; }
+    :root.light .stars { display: none; }
 
     /* Thin progress bar along the top */
     .progress { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 3; }
@@ -88,22 +99,24 @@
       padding: 24px; box-sizing: border-box;
       display: flex; flex-direction: column; align-items: center;
     }
-    /* The logo's glossy white circle (same gradient as tools/make_logo.py) */
+    /* The app icon tile (same shape as tools/make_logo.py's tile_svg). */
+    :root { --tile: #000; --ink: #fff; --tile-edge: rgba(255,255,255,.14); }
+    :root.light { --tile: #fff; --ink: #1D1D1F; --tile-edge: rgba(0,0,0,.08); }
     .badge {
-      position: relative; width: 132px; height: 132px; border-radius: 50%;
-      background: radial-gradient(circle at 36% 24%, #fff 0, #EDEDF0 43%, #B9B9C0 86%);
-      box-shadow: inset 0 1.5px 0 #fff, 0 6px 14px rgba(0,0,0,.45);
+      position: relative; width: 128px; height: 128px; border-radius: 28.7px;
+      background: var(--tile); overflow: hidden;
+      box-shadow: 0 0 0 1px var(--tile-edge), 0 18px 40px -12px rgba(0,0,0,.55);
       animation: bob 3.2s ease-in-out infinite;
     }
-    :root.light .badge { box-shadow: inset 0 1.5px 0 #fff, 0 0 0 1px rgba(0,0,0,.08), 0 6px 14px rgba(0,0,0,.15); }
-    /* The drop, cut to shape by the #dropShape clip path. Its box is where
-       the drop sits in the logo (38 x 58 of the 96-wide circle). */
-    .drop {
-      position: absolute; left: 30.2%; top: 19.8%; width: 39.6%; height: 60.4%;
-      background: linear-gradient(#3A3A3C, #000);
-      clip-path: url(#dropShape); overflow: hidden;
-    }
-    /* The water. It starts fully below the drop (top: 100%);
+    :root.light .badge { box-shadow: 0 0 0 1px var(--tile-edge), 0 18px 40px -14px rgba(0,0,0,.22); }
+    /* The mark is drawn on a 256 grid; this box is that grid, scaled down. */
+    .art { position: absolute; left: 0; top: 0; width: 256px; height: 256px;
+      transform: scale(.5); transform-origin: 0 0; }
+    .art svg { position: absolute; inset: 0; width: 256px; height: 256px; }
+    .ink { fill: var(--ink); }
+    /* The water inside the A: cut to the A's shape by #aShape. */
+    .drop { position: absolute; inset: 0; clip-path: url(#aShape); overflow: hidden; }
+    /* The water. It starts fully below the mark (top: 100%);
        flutter_bootstrap.js lowers `top` at each step, which raises it.
        200% wide so it can slide sideways forever without its edge showing. */
     .drop .fill {
@@ -118,7 +131,7 @@
     .drop .fill.front { animation: slide 1.9s linear infinite; }
 
     .brand {
-      margin-top: 24px; font-size: 26px; font-weight: 800; letter-spacing: -.045em; color: var(--text);
+      margin-top: 22px; font-size: 26px; font-weight: 800; letter-spacing: -.045em; color: var(--text);
     }
     .brand .dot { color: #0A84FF; }
 
@@ -167,26 +180,38 @@
 <body>
   <div id="loader" role="status" aria-live="polite" aria-label="Loading AgosAlert">
     <div class="progress"><span id="loaderBar"></span></div>
+    <div class="stars" aria-hidden="true"></div>
+    <script>
+      // Same recipe as the landing page's stars (landing.js starLayer), one still layer.
+      (function () {
+        var w = Math.max(screen.width, innerWidth), h = Math.max(screen.height, innerHeight), out = [];
+        for (var i = 0; i < 300; i++) {
+          var c = Math.random() < 0.12 ? '120,180,255' : Math.random() < 0.08 ? '160,158,255' : '255,255,255';
+          out.push(Math.round(Math.random() * w) + 'px ' + Math.round(Math.random() * h) + 'px rgba(' + c + ',' + (0.25 + Math.random() * 0.6).toFixed(2) + ')');
+        }
+        document.querySelector('#loader .stars').style.boxShadow = out.join(',');
+      })();
+    </script>
 
-    <!-- The drop's outline, in 0-1 units of the .drop box (the logo's drop
-         path from tools/make_logo.py, scaled to fit). -->
-    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-      <clipPath id="dropShape" clipPathUnits="objectBoundingBox">
-        <path d="M.5 0 C.342 .19 0 .414 0 .672 A.5 .328 0 0 0 1 .672 C1 .414 .658 .19 .5 0 Z"/>
-      </clipPath>
-    </svg>
+    <!-- LOGO:START -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><path id="agInk" transform="translate(33.28 30.28) scale(0.74)" d="M75.78 134.95 113.03 36.35Q115.37 30.15 121.41 27.42Q127.45 24.69 133.65 27.03Q140.41 29.59 142.97 36.35L185.51 148.97Q184.68 149.48 183.89 150.08Q170.9 159.96 162 159.96Q158.75 159.96 154.96 158.65L128 87.27L110.21 134.35Q102.02 132.04 94 132.04Q85 132.04 75.78 134.95ZM45.03 216.35 56.61 185.71Q56.95 185.77 57.31 185.82Q61.25 186.35 65.09 185.34Q68.94 184.33 72.11 181.92Q85.1 172.04 94 172.04Q94.95 172.04 95.94 172.15L74.97 227.65Q72.63 233.85 66.59 236.58Q60.55 239.31 54.35 236.97Q48.15 234.63 45.42 228.59Q42.69 222.55 45.03 216.35ZM200.08 187.53 210.97 216.35Q213.31 222.55 210.58 228.59Q207.85 234.63 201.65 236.97Q195.45 239.31 189.41 236.58Q183.37 233.85 181.03 227.65L170.34 199.35Q184.93 197.19 200.08 187.53Z"/><path id="agWave" transform="translate(33.28 30.28) scale(0.74)" d="M52.74 156.45Q74.31 140.04 94 140.04Q113.69 140.04 135.26 156.45Q150.41 167.96 162 167.96Q173.59 167.96 188.74 156.45Q192.69 153.44 197.62 154.11Q202.54 154.78 205.55 158.74Q208.56 162.69 207.89 167.62Q207.22 172.54 203.26 175.55Q181.69 191.96 162 191.96Q142.31 191.96 120.74 175.55Q105.59 164.04 94 164.04Q82.41 164.04 67.26 175.55Q63.31 178.56 58.38 177.89Q53.46 177.22 50.45 173.26Q47.44 169.31 48.11 164.38Q48.78 159.46 52.74 156.45Z"/><clipPath id="aShape"><path transform="translate(33.28 30.28) scale(0.74)" d="M75.78 134.95 113.03 36.35Q115.37 30.15 121.41 27.42Q127.45 24.69 133.65 27.03Q140.41 29.59 142.97 36.35L185.51 148.97Q184.68 149.48 183.89 150.08Q170.9 159.96 162 159.96Q158.75 159.96 154.96 158.65L128 87.27L110.21 134.35Q102.02 132.04 94 132.04Q85 132.04 75.78 134.95ZM45.03 216.35 56.61 185.71Q56.95 185.77 57.31 185.82Q61.25 186.35 65.09 185.34Q68.94 184.33 72.11 181.92Q85.1 172.04 94 172.04Q94.95 172.04 95.94 172.15L74.97 227.65Q72.63 233.85 66.59 236.58Q60.55 239.31 54.35 236.97Q48.15 234.63 45.42 228.59Q42.69 222.55 45.03 216.35ZM200.08 187.53 210.97 216.35Q213.31 222.55 210.58 228.59Q207.85 234.63 201.65 236.97Q195.45 239.31 189.41 236.58Q183.37 233.85 181.03 227.65L170.34 199.35Q184.93 197.19 200.08 187.53Z"/></clipPath></defs></svg>
+    <!-- LOGO:END -->
 
     <div class="page">
       <div class="badge">
-        <div class="drop">
-          <div class="fill back" id="fillBack">
-            <svg viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M0 8 Q25 0 50 8 T100 8 T150 8 T200 8 V16 H0Z" fill="#3FA2FF"/></svg>
-            <div class="body"></div>
+        <div class="art">
+          <svg viewBox="0 0 256 256" aria-hidden="true"><use href="#agInk" class="ink"/></svg>
+          <div class="drop">
+            <div class="fill back" id="fillBack">
+              <svg viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M0 8 Q25 0 50 8 T100 8 T150 8 T200 8 V16 H0Z" fill="#3FA2FF"/></svg>
+              <div class="body"></div>
+            </div>
+            <div class="fill front" id="fillFront">
+              <svg viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M0 8 Q25 16 50 8 T100 8 T150 8 T200 8 V16 H0Z" fill="#3FA2FF"/></svg>
+              <div class="body"></div>
+            </div>
           </div>
-          <div class="fill front" id="fillFront">
-            <svg viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M0 8 Q25 16 50 8 T100 8 T150 8 T200 8 V16 H0Z" fill="#3FA2FF"/></svg>
-            <div class="body"></div>
-          </div>
+          <svg viewBox="0 0 256 256" aria-hidden="true"><use href="#agWave" fill="#0A84FF"/></svg>
         </div>
       </div>
       <div class="brand">agosalert<span class="dot">.</span></div>

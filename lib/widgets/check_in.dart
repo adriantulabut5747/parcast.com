@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/demo_data.dart';
+import '../services/auth.dart';
 import '../services/share.dart';
 import '../services/weather.dart';
 import '../theme.dart';
@@ -21,7 +22,7 @@ import 'tugak.dart';
 ///   Sent with AgosAlert, flood alerts for Mabalacat City.
 String imSafeMessage(DateTime now) {
   final who = [
-    if (!isGuest) kDemoUserName,
+    if (!isGuest) me!.fullName,
     if (myBarangay.value != null) 'Brgy. ${myBarangay.value}',
   ].join(', ');
   final when = '${formatDate(now)}, ${formatTime(now)}';
@@ -38,7 +39,7 @@ Future<void> showImSafe(BuildContext context) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Center(child: TugakImage(size: 110)),
+          const Center(child: TugakImage(size: 110, pose: 'tip')),
           const SizedBox(height: 6),
           Text(
             'Tell people you\'re safe',
@@ -47,7 +48,8 @@ Future<void> showImSafe(BuildContext context) {
               fontFamily: kDisplayFont,
               color: c.textPrimary,
               fontSize: 22,
-              fontWeight: FontWeight.w800,
+              letterSpacing: displayTracking(22),
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
@@ -68,7 +70,7 @@ Future<void> showImSafe(BuildContext context) {
               message,
               style: TextStyle(
                 color: c.textPrimary,
-                fontSize: 14,
+                fontSize: 15,
                 height: 1.45,
               ),
             ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/cupertino.dart' show CupertinoIcons, CupertinoSwitch;
 
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -189,7 +189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label,
               style: TextStyle(
                 color: selected ? c.onInverse : c.textSecondary,
-                fontSize: 12.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -210,24 +210,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool value,
     ValueChanged<bool> onChanged,
   ) {
-    return SwitchListTile(
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: Colors.white,
-      activeTrackColor: kSafe,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-      secondary: IconBadge(icon, c.accent, size: 36, squircle: true),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: c.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
+    // An iOS Settings row: icon tile, title + note, the Apple switch.
+    // The whole row toggles it, like on iPhone.
+    return PressableScale(
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            IconBadge(icon, c.accent, size: 36, squircle: true),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    sub,
+                    style: TextStyle(color: c.textSecondary, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            CupertinoSwitch(
+              value: value,
+              onChanged: onChanged,
+              activeTrackColor: kSafe,
+            ),
+          ],
         ),
-      ),
-      subtitle: Text(
-        sub,
-        style: TextStyle(color: c.textSecondary, fontSize: 11.5),
       ),
     );
   }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
-import '../data/demo_data.dart';
+import '../services/reports.dart';
 import '../theme.dart';
 import 'common.dart';
 
@@ -36,7 +36,7 @@ class PostedBy extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: c.textPrimary,
-                        fontSize: 13.5,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -59,25 +59,44 @@ class PostedBy extends StatelessWidget {
   }
 }
 
-/// A round avatar with the person's initials.
+/// A round avatar with the person's initials, on a color picked from their
+/// user id (same person = same color everywhere, like iOS Contacts).
+/// Never green / orange / red: those mean flood risk here.
 class UserAvatar extends StatelessWidget {
   final Uploader user;
   final double size;
   const UserAvatar(this.user, {this.size = 40, super.key});
 
+  static const _colors = [
+    kBlue,
+    kTileIndigo,
+    kTileTeal,
+    kTilePurple,
+    Color(0xFFA2845E), // iOS brown
+    Color(0xFF64D2FF), // iOS cyan
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final color = _colors[user.userId.hashCode.abs() % _colors.length];
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(color: kGraphite, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color.lerp(color, Colors.white, 0.22)!, color],
+        ),
+      ),
       child: Text(
         user.initials,
         style: TextStyle(
           color: Colors.white,
           fontSize: size * 0.36,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -131,7 +150,7 @@ class _ProfileCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: const LinearGradient(
-          colors: [kGraphite, Color(0xFF111113)],
+          colors: [kGraphite, kBgDark],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -186,15 +205,17 @@ class _ProfileCard extends StatelessWidget {
                               user.name,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 19,
+                                fontSize: 20,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                             Text(
-                              '${user.reports} flood reports posted',
+                              // Paper: reports and votes received.
+                              '${user.reports} active ${user.reports == 1 ? 'report' : 'reports'}'
+                              '  ·  ${user.upVotes} helpful  ·  ${user.downVotes} not helpful',
                               style: const TextStyle(
                                 color: white80,
-                                fontSize: 12.5,
+                                fontSize: 13,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -243,92 +264,11 @@ class _ProfileCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Votes on their reports',
-                                style: TextStyle(
-                                  color: Color(0xD9FFFFFF),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              'SAMPLE',
-                              style: TextStyle(
-                                color: Color(0xB3FFFFFF),
-                                fontSize: 8.5,
-                                letterSpacing: 0.8,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            _stat(
-                              CupertinoIcons.hand_thumbsup_fill,
-                              user.upVotes,
-                              'Thumbs up',
-                            ),
-                            _stat(
-                              CupertinoIcons.hand_thumbsdown_fill,
-                              user.downVotes,
-                              'Thumbs down',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _stat(IconData icon, int count, String label) {
-    return Expanded(
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$count',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Text(
-                label,
-                style: const TextStyle(color: Color(0xD9FFFFFF), fontSize: 11),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

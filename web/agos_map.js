@@ -350,6 +350,10 @@
       cb.onCamera(map.getBearing(), map.getPitch());
     }
     map.on('rotate', camera);
+    map.on('moveend', () => {
+      const c = map.getCenter();
+      cb.onMoveEnd(c.lat, c.lng);
+    });
     map.on('pitch', () => {
       apply3d(map.getPitch());
       camera();

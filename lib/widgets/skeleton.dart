@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 
+import '../services/share.dart' show reloadPage;
 import '../theme.dart';
 import 'responsive.dart';
 import 'common.dart';
@@ -114,7 +116,13 @@ class _DeferredViewState extends State<DeferredView> {
   // Starts the download once and remembers it. (If we called widget.load()
   // inside build(), every rebuild would start it again.) Not `final`,
   // because the "Try again" button replaces it with a new attempt.
-  late Future<void> _loading = widget.load();
+  late Future<void> _loading = _load();
+
+  // One silent retry covers a network blip. If it still fails online, a
+  // new version almost surely went live while this tab was open (the old
+  // app asks for part files the new build replaced), so on the web
+  // "Try again" reloads the whole page (reloadPage).
+  Future<void> _load() => widget.load().catchError((Object _) => widget.load());
 
   @override
   Widget build(BuildContext context) {
@@ -148,36 +156,47 @@ class _DeferredViewState extends State<DeferredView> {
 
   Widget _error(BuildContext context) {
     final c = AppColors(context);
-    return Center(
+    // Material: this can show on a pushed page with no Scaffold, where bare
+    // text would get Flutter's yellow "no text style" underline.
+    return Material(
       key: const ValueKey('error'),
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconBadge(CupertinoIcons.wifi_slash, c.textSecondary, size: 60),
-            const SizedBox(height: 14),
-            Text(
-              'Couldn\'t load this page',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
+      color: c.background,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconBadge(CupertinoIcons.wifi_slash, c.textSecondary, size: 60),
+              const SizedBox(height: 14),
+              Text(
+                'Couldn\'t load this page',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Check your internet connection.',
-              style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-            ),
-            const SizedBox(height: 14),
-            // Start a fresh download attempt. setState makes the
-            // FutureBuilder watch the new one (and show the skeleton again).
-            FilledButton.tonal(
-              onPressed: () => setState(() => _loading = widget.load()),
-              child: const Text('Try again'),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                kIsWeb
+                    ? 'Check your connection. If the app was just updated, Try again reloads it.'
+                    : 'Check your internet connection.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              // Start a fresh download attempt. setState makes the
+              // FutureBuilder watch the new one (and show the skeleton again).
+              TintedButton(
+                label: 'Try again',
+                onPressed: () {
+                  if (kIsWeb) return reloadPage();
+                  setState(() => _loading = _load());
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -283,19 +302,82 @@ class FormPageSkeleton extends StatelessWidget {
   }
 }
 
-/// Placeholder for a tab while its code downloads (Alerts, Assistance,
-/// More): a page title, a row of filters, and a few cards. On desktops the
-/// cards sit in two columns, like the real pages.
+/// The Large Title + subtitle every tab starts with (PageHeader).
+class _HeaderSkeleton extends StatelessWidget {
+  const _HeaderSkeleton();
+
+  @override
+  Widget build(BuildContext context) => const Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SkeletonBox(width: 170, height: 34, radius: 9),
+      SizedBox(height: 8),
+      SkeletonBox(width: 230, height: 14, radius: 7),
+    ],
+  );
+}
+
+/// Placeholder for the Reports tab while its code downloads: the same
+/// shapes as the real page (title, filter chips, photo posts, three
+/// across on desktops), so nothing jumps when it arrives.
 class ListPageSkeleton extends StatelessWidget {
   const ListPageSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
     final desktop = screenSizeOf(context) == ScreenSize.desktop;
-    Widget cards(int n) => Column(
+    const post = SkeletonBox(height: 470, radius: 20);
+    return Shimmer(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: pagePadding(context),
+        children: [
+          const _HeaderSkeleton(),
+          const SizedBox(height: 18),
+          const Row(
+            spacing: 8,
+            children: [
+              SkeletonBox(width: 56, height: 40, radius: 20),
+              SkeletonBox(width: 150, height: 40, radius: 20),
+              SkeletonBox(width: 64, height: 40, radius: 20),
+            ],
+          ),
+          const SizedBox(height: 46),
+          if (desktop)
+            const Row(
+              spacing: 16,
+              children: [
+                Expanded(child: post),
+                Expanded(child: post),
+                Expanded(child: post),
+              ],
+            )
+          else
+            const Column(spacing: 16, children: [post, post]),
+        ],
+      ),
+    );
+  }
+}
+
+/// Placeholder for the Help tab: the SOS card, then hotlines and the
+/// nearest shelter (side by side on desktops, like the real page).
+class HelpPageSkeleton extends StatelessWidget {
+  const HelpPageSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = screenSizeOf(context) == ScreenSize.desktop;
+    const sos = SkeletonBox(height: 360, radius: 24);
+    const side = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       spacing: 12,
       children: [
-        for (var i = 0; i < n; i++) const SkeletonBox(height: 92, radius: 20),
+        SkeletonBox(width: 110, height: 20, radius: 6),
+        SkeletonBox(height: 136, radius: 20),
+        SizedBox(height: 8),
+        SkeletonBox(width: 170, height: 20, radius: 6),
+        SkeletonBox(height: 72, radius: 20),
       ],
     );
     return Shimmer(
@@ -303,36 +385,19 @@ class ListPageSkeleton extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         padding: pagePadding(context),
         children: [
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: SkeletonBox(width: 180, height: 26, radius: 8),
-          ),
-          const SizedBox(height: 8),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: SkeletonBox(width: 140, height: 12, radius: 6),
-          ),
-          const SizedBox(height: 22),
-          const Row(
-            spacing: 8,
-            children: [
-              SkeletonBox(width: 70, height: 36, radius: 18),
-              SkeletonBox(width: 90, height: 36, radius: 18),
-              SkeletonBox(width: 90, height: 36, radius: 18),
-            ],
-          ),
-          const SizedBox(height: 18),
+          const _HeaderSkeleton(),
+          const SizedBox(height: 24),
           if (desktop)
-            Row(
+            const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 24,
+              spacing: 28,
               children: [
-                SizedBox(width: 420, child: cards(5)),
-                const Expanded(child: SkeletonBox(height: 480, radius: 20)),
+                Expanded(child: sos),
+                Expanded(child: side),
               ],
             )
           else
-            cards(5),
+            const Column(spacing: 28, children: [sos, side]),
         ],
       ),
     );

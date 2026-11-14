@@ -5,6 +5,7 @@ import '../data/demo_data.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/links.dart';
+import '../widgets/tugak.dart';
 import '../widgets/agos_icons.dart';
 
 /// ============================================================
@@ -20,7 +21,7 @@ class AboutScreen extends StatelessWidget {
       (
         CupertinoIcons.cloud_fill,
         'Live weather',
-        'Real-time conditions and forecast for Mabalacat City.',
+        'Live conditions and forecast for Mabalacat City.',
       ),
       (
         AgosIcons.flood,
@@ -74,7 +75,7 @@ class AboutScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.textPrimary,
-                  fontSize: 14.5,
+                  fontSize: 15,
                   height: 1.55,
                 ),
               ),
@@ -84,7 +85,7 @@ class AboutScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.textSecondary,
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -102,12 +103,14 @@ class AboutScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Unofficial demo. AgosAlert is a school project, not '
-                        'an app of the Mabalacat City government. The Admins '
-                        '(possibly Mabalacat officials) are not confirmed yet, '
-                        'and all data is sample data.',
+                        'an app of the Mabalacat City government. The weather '
+                        'and flood reports are live (posted by users, not yet '
+                        'checked by an official); alerts and evacuation centers '
+                        'are sample data (marked SAMPLE). Who will run it is '
+                        'not decided yet.',
                         style: TextStyle(
                           color: c.textSecondary,
-                          fontSize: 12.5,
+                          fontSize: 13,
                           height: 1.45,
                         ),
                       ),
@@ -141,7 +144,7 @@ class AboutScreen extends StatelessWidget {
                                   style: TextStyle(
                                     color: c.textPrimary,
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 14,
+                                    fontSize: 15,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -149,7 +152,7 @@ class AboutScreen extends StatelessWidget {
                                   features[i].$3,
                                   style: TextStyle(
                                     color: c.textSecondary,
-                                    fontSize: 12.5,
+                                    fontSize: 13,
                                     height: 1.4,
                                   ),
                                 ),
@@ -168,7 +171,11 @@ class AboutScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _source(c, 'Weather', 'Open-Meteo (open-meteo.com)'),
+                    _source(
+                      c,
+                      'Weather, air quality',
+                      'Open-Meteo (open-meteo.com)',
+                    ),
                     _source(
                       c,
                       'Map',
@@ -177,16 +184,31 @@ class AboutScreen extends StatelessWidget {
                     ),
                     _source(
                       c,
-                      'Flood reports, alerts, centers',
-                      'Sample data (live data coming soon)',
+                      'Flood reports and photos',
+                      'Posted by AgosAlert users',
                     ),
                     _source(
                       c,
-                      'Flood photos',
-                      'Apalit, Pampanga (2023) by E911a, Wikimedia Commons, CC BY-SA 4.0',
+                      'Alerts, evacuation centers',
+                      'Sample data (live data coming soon)',
                     ),
                     for (final p in kLocalPhotos)
                       _source(c, p.place, '${p.credit} (Wikimedia Commons)'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              const FieldLabel('Who made it'),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _source(c, 'Made by', 'BSIT students, school capstone'),
+                    _source(
+                      c,
+                      'Source code',
+                      'github.com/adriantulabut5747/AgosAlert',
+                    ),
                   ],
                 ),
               ),
@@ -212,7 +234,7 @@ class AboutScreen extends StatelessWidget {
           Expanded(
             child: Text(
               what,
-              style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+              style: TextStyle(color: c.textSecondary, fontSize: 13),
             ),
           ),
           Flexible(
@@ -221,7 +243,7 @@ class AboutScreen extends StatelessWidget {
               textAlign: TextAlign.right,
               style: TextStyle(
                 color: c.textPrimary,
-                fontSize: 12.5,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -246,6 +268,11 @@ class HelpScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
+              const TugakBeside(
+                pose: 'think',
+                line: 'These are the questions people ask me most. Tap one, the answers are short.',
+              ),
+              const SizedBox(height: 20),
               const FieldLabel('Frequently asked questions'),
               for (final (q, a) in kFaqs)
                 Padding(
@@ -274,7 +301,7 @@ class HelpScreen extends StatelessWidget {
                           q,
                           style: TextStyle(
                             color: c.textPrimary,
-                            fontSize: 13.5,
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -317,27 +344,28 @@ class HelpScreen extends StatelessWidget {
                             style: TextStyle(
                               color: c.textPrimary,
                               fontWeight: FontWeight.w800,
-                              fontSize: 14.5,
+                              fontSize: 15,
                             ),
                           ),
                           Text(
                             'Call the Mabalacat CDRRMO',
                             style: TextStyle(
                               color: c.textSecondary,
-                              fontSize: 12.5,
+                              fontSize: 13,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    FilledButton(
+                    TintedButton(
+                      label: 'Call',
+                      icon: CupertinoIcons.phone_fill,
                       onPressed: () => confirmCall(
                         context,
                         name: kHotlines[1].name,
                         number: kHotlines[1].number,
                         color: kBlue,
                       ),
-                      child: const Text('Call'),
                     ),
                   ],
                 ),

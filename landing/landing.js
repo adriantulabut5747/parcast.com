@@ -1,89 +1,52 @@
 /* ============================================================
    AgosAlert landing page behaviour. No libraries.
+   The live 3D Tugak in the hero is a separate module (tugak.js).
    ============================================================ */
 (function () {
   'use strict';
 
-  var root = document.documentElement;
   var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var $ = function (id) { return document.getElementById(id); };
+  var all = function (sel) { return document.querySelectorAll(sel); };
 
-  function theme() { return root.dataset.theme === 'light' ? 'light' : 'dark'; }
+  /* Where the app lives, relative to this page. 'guest' skips the app's
+     login screen (lib/services/session.dart). The app picks its own theme. */
+  function appUrl(as) { return 'app/' + (as === 'guest' ? '?as=guest' : ''); }
 
-  /* Where the app lives, relative to this page, with who logged in and
-     the current theme. The app reads these (lib/services/session.dart). */
-  function appUrl(as) {
-    return 'app/?as=' + as + '&theme=' + theme();
-  }
+  /* ---------------- Night sky ----------------
+     Three layers of stars as box-shadows on one tiny dot each (drawn once,
+     no canvas loop), plus a few sparkles. Sized for big monitors; the
+     .sky clips the rest. */
 
-  /* ---------------- Theme toggle ---------------- */
-
-  var themeToggle = $('themeToggle');
-  function syncThemeButton() {
-    themeToggle.setAttribute('aria-label',
-      theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
-    document.querySelector('meta[name="theme-color"]')
-      .setAttribute('content', theme() === 'dark' ? '#060911' : '#E6F1FB');
-  }
-  function setTheme(t) {
-    root.dataset.theme = t;
-    try { localStorage.setItem('agos-theme', t); } catch (e) {}
-    syncThemeButton();
-  }
-  themeToggle.addEventListener('click', function () {
-    setTheme(theme() === 'dark' ? 'light' : 'dark');
-  });
-  syncThemeButton();
-
-  // Coming back from the app (?theme=...): keep that choice, then tidy
-  // the address bar so a shared link doesn't carry it along.
-  var params = new URLSearchParams(location.search);
-  if (params.has('theme')) {
-    setTheme(theme());
-    history.replaceState(null, '', location.pathname + location.hash);
-  }
-
-  /* ---------------- Water lines ----------------
-     Same math as the app's WaterLines painter (lib/widgets/common.dart):
-     each line a bit lower, longer-waved, and fainter than the last. */
-
-  var waterSvg = $('waterLines');
-  function drawWaterLines() {
-    var w = waterSvg.clientWidth, h = waterSvg.clientHeight, count = 6, html = '';
-    waterSvg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  function starLayer(el, count, alpha) {
+    var w = Math.max(screen.width, innerWidth, 1600), h = Math.max(screen.height, innerHeight, 1000);
+    var out = [];
     for (var i = 0; i < count; i++) {
-      var y = h * (i + 1) / (count + 1);
-      var amp = 5 + i * 1.6, wave = 240 + i * 55, phase = i * 1.7;
-      var d = 'M0 ' + (y + amp * Math.sin(phase)).toFixed(1);
-      for (var x = 8; x <= w + 8; x += 8) {
-        d += 'L' + x + ' ' + (y + amp * Math.sin(x / wave * 2 * Math.PI + phase)).toFixed(1);
-      }
-      html += '<path d="' + d + '" stroke-opacity="' + (1 - i / (count * 1.6)).toFixed(2) + '"/>';
+      var x = Math.round(Math.random() * w), y = Math.round(Math.random() * h);
+      var a = (alpha * (0.4 + Math.random() * 0.6)).toFixed(2);
+      // a few stars tinted the app's blue / indigo, the rest white
+      var c = Math.random() < 0.12 ? '120,180,255' : Math.random() < 0.08 ? '160,158,255' : '255,255,255';
+      out.push(x + 'px ' + y + 'px rgba(' + c + ',' + a + ')');
     }
-    waterSvg.innerHTML = html;
+    el.style.boxShadow = out.join(',');
+  }
+  starLayer(document.querySelector('.stars.s1'), 260, 0.55);
+  starLayer(document.querySelector('.stars.s2'), 90, 0.8);
+  starLayer(document.querySelector('.stars.s3'), 34, 1);
+  var sky = document.querySelector('.sky');
+  for (var s = 0; s < 9; s++) {
+    var sp = document.createElement('i');
+    sp.className = 'spark';
+    sp.style.left = (Math.random() * 96 + 2) + '%';
+    sp.style.top = (Math.random() * 90 + 4) + '%';
+    sp.style.animationDelay = (-Math.random() * 4).toFixed(2) + 's';
+    sp.style.transform = 'scale(' + (0.5 + Math.random() * 0.7).toFixed(2) + ')';
+    if (Math.random() < 0.4) sp.style.setProperty('--c', '#7fb4ff');
+    sky.appendChild(sp);
   }
 
-  /* ---------------- Card scale ----------------
-     The weather card is designed at 372px next to a 292px phone; on
-     smaller phones it shrinks by the same ratio. */
-
-  var frontPhone = document.querySelector('.device.front .phone');
-  function scaleCard() {
-    root.style.setProperty('--cs', (frontPhone.offsetWidth / 292).toFixed(3));
-  }
-
-  var resizeTimer;
-  function onResize() {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function () { drawWaterLines(); scaleCard(); }, 120);
-  }
-  drawWaterLines();
-  scaleCard();
-  addEventListener('resize', onResize);
-
-  /* ---------------- Kapampangan greeting ----------------
-     By the time in Mabalacat (Asia/Manila), whatever the visitor's
-     own time zone is. */
+  /* ---------------- Kapampangan greeting + phone clocks ----------------
+     By the time in Mabalacat (Asia/Manila), whatever the visitor's zone. */
 
   var greetings = [
     // [from hour, until hour, Kapampangan, English]
@@ -97,25 +60,23 @@
     var parts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(new Date());
-    var get = function (type) {
-      return +parts.filter(function (p) { return p.type === type; })[0].value;
-    };
+    var get = function (type) { return +parts.filter(function (p) { return p.type === type; })[0].value; };
     return { h: get('hour'), m: get('minute') };
   }
 
   function updateClock() {
-    var t = manilaTime();
-    var g = night;
+    var t = manilaTime(), g = night;
     greetings.forEach(function (row) { if (t.h >= row[0] && t.h < row[1]) g = [row[2], row[3]]; });
-    $('greeting').innerHTML = '<span class="kap">' + g[0] + '</span> <span class="tr">' + g[1] + '</span>';
-    // The phones' status bars show the time in Mabalacat too.
+    $('greeting').innerHTML = '<span class="kap">' + g[0] + '</span> ' + g[1];
     var clock = (t.h % 12 || 12) + ':' + String(t.m).padStart(2, '0');
-    document.querySelectorAll('.sb-time').forEach(function (el) { el.textContent = clock; });
+    all('.sb-time').forEach(function (el) { el.textContent = clock; });
   }
   updateClock();
   setInterval(updateClock, 30 * 1000);
 
-  /* ---------------- Barangay marquee ---------------- */
+  /* ---------------- Marquees ----------------
+     Each track holds its list twice: the CSS loop slides by exactly one
+     copy, so it never jumps. */
 
   var barangays = [
     'Atlu-Bola', 'Bical', 'Bundagul', 'Cacutud', 'Calumpang', 'Camachiles',
@@ -125,9 +86,58 @@
     'Santa Ines', 'Santa Maria', 'Santo Rosario', 'Sapang Balen',
     'Sapang Biabas', 'Tabun',
   ];
-  // Twice in a row: the CSS loop slides by exactly one copy (see landing.css).
-  var names = barangays.map(function (b) { return '<span>' + b + '</span>'; }).join('');
-  $('barangayTrack').innerHTML = names + names;
+  function spans(list) { return list.map(function (b) { return '<span>' + b + '</span>'; }).join(''); }
+  var half = Math.ceil(barangays.length / 2);
+  var rowA = barangays.slice(0, half), rowB = barangays.slice(half);
+  $('mqA').innerHTML = spans(rowA.concat(rowA));
+  $('mqB').innerHTML = spans(rowB.concat(rowB));
+  $('barangayList').textContent = 'Covers all 27 barangays: ' + barangays.join(', ') + '.';
+
+  var photoTrack = $('photoTrack');
+  Array.prototype.slice.call(photoTrack.children).forEach(function (img) {
+    var copy = img.cloneNode(true);
+    copy.alt = '';
+    copy.setAttribute('aria-hidden', 'true');
+    photoTrack.appendChild(copy);
+  });
+
+  /* ---------------- Tugak's bubbles ----------------
+     Each bubble types its line out the first time it scrolls into view,
+     like he's saying it. Screen readers get the whole line at once
+     (aria-label); the typed copy is hidden from them. The hero tells
+     tugak.js to move his mouth while it types. */
+
+  function typeLine(bubble, text) {
+    var span = bubble.querySelector('.say-text');
+    bubble.setAttribute('aria-label', 'Tugak says: ' + text);
+    span.setAttribute('aria-hidden', 'true');
+    bubble.classList.add('shown');
+    clearInterval(bubble._typing);
+    if (reduceMotion) { span.textContent = text; return; }
+    var chars = Array.from(text), i = 0;
+    span.textContent = '';
+    bubble.classList.add('typing');
+    if (bubble.id === 'heroSay') {
+      document.dispatchEvent(new CustomEvent('tugak-talk', { detail: chars.length * 32 }));
+    }
+    bubble._typing = setInterval(function () {
+      span.textContent = chars.slice(0, ++i).join('');
+      if (i >= chars.length) { clearInterval(bubble._typing); bubble.classList.remove('typing'); }
+    }, 32);
+  }
+
+  var sayer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      sayer.unobserve(e.target);
+      var b = e.target;
+      setTimeout(function () { typeLine(b, b.dataset.line); }, 150);
+    });
+  }, { rootMargin: '0px 0px -5% 0px' });
+  all('.say:not(#heroSay)').forEach(function (b) {
+    b.dataset.line = b.querySelector('.say-text').textContent;
+    sayer.observe(b);
+  });
 
   /* ---------------- Live weather ----------------
      Same request and the same rules as lib/services/weather.dart. */
@@ -138,26 +148,26 @@
     + '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum'
     + '&forecast_days=1&timezone=Asia%2FManila';
 
-  // weatherInfo() in weather.dart: WMO code -> label + icon.
+  // weatherInfo() in weather.dart: WMO code -> label + CupertinoIcons name.
   function weatherInfo(code, isDay) {
-    if (code === 0) return isDay ? ['Clear sky', 'sunny'] : ['Clear night', 'clear_night'];
-    if (code <= 2) return ['Partly cloudy', isDay ? 'partly_cloudy_day' : 'nights_stay'];
-    if (code === 3) return ['Overcast', 'cloud'];
-    if (code <= 48) return ['Foggy', 'foggy'];
-    if (code <= 57) return ['Drizzle', 'grain'];
-    if (code <= 67) return ['Rain', 'water_drop'];
-    if (code <= 77) return ['Snow', 'ac_unit'];
-    if (code <= 82) return ['Rain showers', 'umbrella'];
-    return ['Thunderstorm', 'thunderstorm'];
+    if (code === 0) return isDay ? ['Clear sky', 'sun_max_fill'] : ['Clear night', 'moon_fill'];
+    if (code <= 2) return ['Partly cloudy', isDay ? 'cloud_fill' : 'cloud_moon_fill'];
+    if (code === 3) return ['Overcast', 'cloud_fill'];
+    if (code <= 48) return ['Foggy', 'cloud_fog_fill'];
+    if (code <= 57) return ['Drizzle', 'cloud_drizzle_fill'];
+    if (code <= 67) return ['Rain', 'drop_fill'];
+    if (code <= 77) return ['Snow', 'snow'];
+    if (code <= 82) return ['Rain showers', 'umbrella_fill'];
+    return ['Thunderstorm', 'cloud_bolt_rain_fill'];
   }
 
   // weatherGradient() in weather.dart: the card's colors match the sky.
   function weatherGradient(code, isDay) {
-    if (!isDay) return ['#1B2556', '#0B1130'];
-    if (code <= 2) return ['#2D7DD2', '#29C5F6'];
-    if (code >= 95) return ['#3B3F6B', '#1E2140'];
-    if (code >= 51) return ['#1E4E79', '#2D6FA8'];
-    return ['#3A5A80', '#5B84B1'];
+    if (code >= 95) return ['#1A2033', '#07090F'];
+    if (code >= 51) return ['#1B2B42', '#09111D'];
+    if (!isDay) return ['#16194A', '#05061A'];
+    if (code >= 3) return ['#1E3150', '#0A1426'];
+    return ['#1C3D72', '#081633'];
   }
 
   // floodOutlook in weather.dart, word for word:
@@ -172,26 +182,35 @@
     return ['low', 'Low risk'];
   }
 
+  // tugakLine() in lib/widgets/tugak.dart, for the data this page has
+  // (no hourly forecast here): what to do first; a dry joke only when
+  // nothing is wrong, never on a high outlook.
+  function tugakLine(code, isDay, outlook, rainChance) {
+    if (outlook === 'high') return 'Heavy rain today. Keep your go-bag by the door and stay off low streets.';
+    if (code >= 51) return 'It’s raining now. Skip the shortcuts by the creek.';
+    if (outlook === 'moderate' || rainChance >= 50) return 'Rain likely later today. Bring the umbrella, not the excuses.';
+    if (!isDay) return 'No rain tonight. Charge your phone and sleep. I’ve got the watch.';
+    return 'Dry roads for now. Go run your errands, I’ll hold the fort.';
+  }
+
   function formatTime(iso) {
     // "2026-09-28T21:00" is already Manila time (timezone=Asia/Manila).
     var hh = +iso.slice(11, 13), mm = iso.slice(14, 16);
     return (hh % 12 || 12) + ':' + mm + ' ' + (hh < 12 ? 'AM' : 'PM');
   }
 
-  // The big number counts up from 0, like the app's card.
   function countUp(el, to) {
     if (reduceMotion) { el.textContent = Math.round(to); return; }
     var start = performance.now(), dur = 1100;
     (function frame(now) {
       var p = Math.min(1, (now - start) / dur);
-      var eased = 1 - Math.pow(1 - p, 3);
-      el.textContent = Math.round(to * eased);
+      el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3)));
       if (p < 1) requestAnimationFrame(frame);
     })(start);
   }
 
-  var card = $('weatherCard');
-  var firstLoad = true;
+  var card = $('weatherCard'), heroSay = $('heroSay');
+  var firstLoad = true, lastLine = '';
 
   function showWeather(json) {
     var cur = json.current, day = json.daily;
@@ -204,16 +223,15 @@
     card.style.background = 'linear-gradient(135deg, ' + grad[0] + ', ' + grad[1] + ')';
     $('wTime').textContent = formatTime(cur.time);
     $('wLabel').textContent = info[0];
-    $('wIcon').textContent = info[1];
+    $('wIcon').dataset.i = info[1];
     $('wSub').textContent = 'H ' + max + '°  ·  L ' + min + '°  ·  Feels ' + Math.round(cur.apparent_temperature) + '°';
     $('wRainChance').textContent = rainChance + '%';
     $('wRainSum').textContent = rainSum + ' mm';
     $('wHumidity').textContent = cur.relative_humidity_2m + '%';
     $('wWind').textContent = Math.round(cur.wind_speed_10m) + ' km/h';
 
-    // Wait for the card's own entrance before counting up the first time.
     var temp = cur.temperature_2m;
-    if (firstLoad) setTimeout(function () { countUp($('wTemp'), temp); }, reduceMotion ? 0 : 1100);
+    if (firstLoad) setTimeout(function () { countUp($('wTemp'), temp); }, reduceMotion ? 0 : 900);
     else $('wTemp').textContent = Math.round(temp);
     firstLoad = false;
     card.dataset.state = 'ready';
@@ -222,19 +240,22 @@
     $('outlookChip').dataset.risk = outlook[0];
     $('oLevel').textContent = outlook[1];
 
-    // "How it works", cards 1 and 2: the same numbers, and which rule
-    // matched today.
+    // 01 Weather: the same numbers, and which rule matched today.
     $('hwChance').textContent = rainChance + '%';
     $('hwSum').textContent = rainSum + ' mm';
     $('hwCode').textContent = code + ' · ' + info[0].toLowerCase();
     $('hwTime').textContent = 'Live · updated ' + formatTime(cur.time);
-    document.querySelectorAll('.rule').forEach(function (r) {
-      r.classList.toggle('is-today', r.dataset.level === outlook[0]);
-    });
+    all('.rule').forEach(function (r) { r.classList.toggle('is-today', r.dataset.level === outlook[0]); });
 
     $('weatherText').textContent = 'Live weather in Mabalacat City: ' + Math.round(temp) + ' degrees, '
       + info[0].toLowerCase() + ', ' + rainChance + '% chance of rain today. Flood outlook today: '
       + outlook[1].toLowerCase() + '.';
+
+    var line = tugakLine(code, isDay, outlook[0], rainChance);
+    if (line !== lastLine) {
+      lastLine = line;
+      setTimeout(function () { typeLine(heroSay, line); }, reduceMotion ? 0 : 1300); // after the hero's entrance
+    }
   }
 
   function loadWeather() {
@@ -247,46 +268,26 @@
       })
       .then(showWeather)
       .catch(function () {
-        // Keep the last good reading if there is one.
+        // Keep the last good reading if there is one. Otherwise say so
+        // everywhere a number would be: a dash that never fills in looks broken.
         if (card.dataset.state === 'ready') return;
         card.dataset.state = 'error';
+        $('wTemp').textContent = '–';
         $('wLabel').textContent = 'Weather unavailable';
-        $('wSub').textContent = 'Check your connection and reload.';
+        $('wSub').textContent = 'Couldn’t reach Open-Meteo. Reload to try again.';
+        ['wRainChance', 'wRainSum', 'wHumidity', 'wWind', 'hwChance', 'hwSum', 'hwCode'].forEach(function (id) {
+          $(id).textContent = '–';
+        });
         $('outlookChip').dataset.risk = 'error';
         $('oLevel').textContent = 'Unavailable';
+        $('hwTime').textContent = 'Couldn’t reach Open-Meteo just now. Reload the page to try again.';
+        document.querySelector('.reading-foot .live-dot').hidden = true;
+        typeLine(heroSay, 'I can’t reach the weather right now. Reload in a bit, or open the app.');
       })
       .finally(function () { clearTimeout(timer); });
   }
   loadWeather();
   setInterval(loadWeather, 10 * 60 * 1000); // Open-Meteo updates every 15 min
-
-  /* ---------------- Mouse tilt ----------------
-     The phones lean toward the cursor. Mouse only (no hover on
-     touch screens), and not for reduced-motion visitors. Each frame
-     moves 8% of the way to the target, which smooths out jumpy mice. */
-
-  var stage = $('stage');
-  if (!reduceMotion && matchMedia('(hover: hover) and (pointer: fine)').matches) {
-    var target = { x: 0, y: 0 }, now = { x: 0, y: 0 }, running = false;
-    var tick = function () {
-      now.x += (target.x - now.x) * 0.08;
-      now.y += (target.y - now.y) * 0.08;
-      stage.style.setProperty('--tx', now.x.toFixed(4));
-      stage.style.setProperty('--ty', now.y.toFixed(4));
-      if (Math.abs(target.x - now.x) + Math.abs(target.y - now.y) > 0.001) {
-        requestAnimationFrame(tick);
-      } else {
-        running = false;
-      }
-    };
-    var kick = function () { if (!running) { running = true; requestAnimationFrame(tick); } };
-    addEventListener('pointermove', function (e) {
-      target.x = (e.clientX / innerWidth - 0.5) * 2;   // -1 left ... 1 right
-      target.y = (e.clientY / innerHeight - 0.5) * 2;  // -1 top  ... 1 bottom
-      kick();
-    });
-    document.addEventListener('pointerleave', function () { target.x = 0; target.y = 0; kick(); });
-  }
 
   /* ---------------- Toast ---------------- */
 
@@ -307,87 +308,82 @@
     toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 5000);
   }
 
-  document.querySelectorAll('.store').forEach(function (btn) {
+  all('.store').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      showToast('The ' + btn.dataset.store + ' app is coming soon.',
-        { label: 'Use the web app →', href: appUrl('guest') });
+      showToast('The ' + btn.dataset.store + ' app is coming soon.', { label: 'Use the web app →', href: appUrl('guest') });
     });
   });
 
-  /* ---------------- Login popup ---------------- */
+  /* ---------------- Open-the-app popup ----------------
+     No email or password here: the app has its own login screen. */
 
   var modal = $('loginModal');
-  var form = $('loginForm');
-  var submit = $('loginSubmit');
+  var choices = modal.querySelectorAll('.choice');
 
   function openLogin() {
     if (modal.open) return;
     modal.classList.remove('closing');
     modal.showModal();
-    // Put the cursor in the email field on computers. On phones that
-    // would pop the keyboard up over the popup straight away.
-    if (matchMedia('(pointer: fine)').matches) form.email.focus();
   }
-
   function closeLogin() {
     if (!modal.open || modal.classList.contains('closing')) return;
     if (reduceMotion) { modal.close(); return; }
     modal.classList.add('closing');
-    modal.querySelector('.modal-card').addEventListener('animationend', function done() {
+    modal.querySelector('.modal-card').addEventListener('animationend', function () {
       modal.classList.remove('closing');
       modal.close();
     }, { once: true });
   }
 
-  $('openLogin').addEventListener('click', openLogin);
+  all('[data-open-app]').forEach(function (b) { b.addEventListener('click', openLogin); });
+  all('[data-guest]').forEach(function (b) { b.addEventListener('click', function () { location.href = appUrl('guest'); }); });
   $('closeLogin').addEventListener('click', closeLogin);
-  // Esc: play the closing animation instead of vanishing instantly.
   modal.addEventListener('cancel', function (e) { e.preventDefault(); closeLogin(); });
-  // A click on the dark backdrop lands on the <dialog> itself.
   modal.addEventListener('click', function (e) { if (e.target === modal) closeLogin(); });
 
-  $('togglePassword').addEventListener('click', function () {
-    var input = $('password'), show = input.type === 'password';
-    input.type = show ? 'text' : 'password';
-    this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-    this.querySelector('.ms').textContent = show ? 'visibility' : 'visibility_off';
-  });
-
-  $('forgot').addEventListener('click', function () {
-    showToast('Password reset isn’t available in the demo yet.');
-  });
-
-  // Demo login: no checks, nothing sent. A short pause so the button's
-  // loading state is visible, then into the app.
-  function enterApp(as) {
-    submit.classList.add('loading');
-    submit.disabled = true;
-    setTimeout(function () { location.href = appUrl(as); }, reduceMotion ? 0 : 700);
-  }
-  form.addEventListener('submit', function (e) { e.preventDefault(); enterApp('user'); });
-  $('googleLogin').addEventListener('click', function () { enterApp('user'); });
-  $('guestLogin').addEventListener('click', function () { enterApp('guest'); });
-
-  // Coming back with the Back button restores this page from memory with
-  // the button still spinning. pageshow + persisted = restored that way.
-  addEventListener('pageshow', function (e) {
-    if (e.persisted) { submit.classList.remove('loading'); submit.disabled = false; }
-  });
-
-  /* ---------------- Fade-in on scroll ----------------
-     Each .reveal block fades up the first time a bit of it is on
-     screen. The barangay map uses the same class for its dots. */
-
-  var revealer = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      if (e.isIntersecting) { e.target.classList.add('in'); revealer.unobserve(e.target); }
+  choices.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      btn.classList.add('loading');
+      choices.forEach(function (b) { b.disabled = true; });
+      setTimeout(function () { location.href = appUrl(btn.dataset.as); }, reduceMotion ? 0 : 500);
     });
-  }, { rootMargin: '0px 0px -12% 0px' });
-  document.querySelectorAll('.reveal').forEach(function (el) { revealer.observe(el); });
+  });
+  // Back button: the page comes back from memory with the spinner still going.
+  addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    choices.forEach(function (b) { b.classList.remove('loading'); b.disabled = false; });
+  });
 
-  /* ---------------- 02 Hotlines ---------------- */
+  /* ---------------- Pop-in on scroll ----------------
+     Only small things (Tugak, the phones, the SOS badge, the map's dots)
+     pop, as soon as they enter the screen. Text never waits. */
 
-  var hotItems = document.querySelectorAll('#hotList li');
+  var popper = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('in'); popper.unobserve(e.target); }
+    });
+  });
+  all('.pop, .city-map').forEach(function (el) { popper.observe(el); });
+
+  /* ---------------- "Four tabs" on phones: 2 pages + dots ----------------
+     The CSS makes the row a paged scroller (2 phones a page); the dots
+     jump to a page and follow the swipe. Hidden on wider screens. */
+
+  var parade = $('parade');
+  var dots = all('#paradeDots button');
+  dots.forEach(function (d, i) {
+    d.addEventListener('click', function () {
+      parade.scrollTo({ left: i * (parade.scrollWidth - parade.clientWidth), behavior: 'smooth' });
+    });
+  });
+  parade.addEventListener('scroll', function () {
+    var page = Math.round(parade.scrollLeft / Math.max(1, parade.scrollWidth - parade.clientWidth));
+    dots.forEach(function (d, i) { d.setAttribute('aria-current', i === page ? 'true' : 'false'); });
+  }, { passive: true });
+
+  /* ---------------- 03 Hotlines ---------------- */
+
+  var hotItems = all('#hotList li');
   hotItems.forEach(function (li) {
     li.style.setProperty('--tint', li.dataset.color);
     var number = li.querySelector('.hot-num').textContent;
@@ -399,8 +395,7 @@
     });
   });
 
-  // One .vcf file with a contact card per hotline. Phones offer to add
-  // them all when the file is opened.
+  // One .vcf file with a contact card per hotline.
   $('saveContacts').addEventListener('click', function () {
     var cards = Array.prototype.map.call(hotItems, function (li) {
       return ['BEGIN:VCARD', 'VERSION:3.0',
@@ -417,10 +412,4 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
     showToast('Contacts file downloaded. Open it to add all five numbers.');
   });
-
-  // The app's "Log in" links here with #login: open the popup right away.
-  if (location.hash === '#login') {
-    history.replaceState(null, '', location.pathname + location.search);
-    openLogin();
-  }
 })();

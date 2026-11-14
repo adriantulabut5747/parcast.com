@@ -85,12 +85,6 @@ const Map<String, LatLng> kBarangayPoints = {
   'Tabun': LatLng(15.2477, 120.5659),
 };
 
-/// The flood_*.jpg photos are from the Aug 2023 floods in Apalit,
-/// Pampanga (not the barangays they're shown for), by Wikimedia Commons
-/// user E911a, licensed CC BY-SA 4.0. The license requires this credit.
-const String kFloodPhotoCredit =
-    'Sample photo · Apalit, Pampanga, 2023 · E911a, CC BY-SA 4.0';
-
 /// A real photo of a local place, from Wikimedia Commons. [credit] must be
 /// shown wherever the photo is (the licenses require it), and all of them
 /// are listed on the About screen. Swap in the group's own photos later
@@ -132,180 +126,17 @@ const List<LocalPhoto> kLocalPhotos = [
 /// Photos of an alert's area (of the PLACE, not of the flood itself).
 const Map<String, LocalPhoto> kAreaPhotos = {'Brgy. Dau': kPhotoDauBridge};
 
-/// The demo account shown in the profile menu and on the More tab.
-const String kDemoUserName = 'AC Parcore';
-const String kDemoUserEmail = 'ac.parcore@mcc.edu.ph';
-const String kDemoUserInitials = 'AP';
-
-class FloodZone {
-  final String barangay;
-  final LatLng point;
-  final RiskLevel risk;
-  final double depthCm; // estimated street flood depth
-  final String note;
-  final String updated;
-  // Thumbs up/down from other users (sample numbers). The user's own
-  // vote is NOT included; it lives in [myVotes].
-  final int upVotes;
-  final int downVotes;
-  // How long ago the pin's photo was taken. Pins are removed
-  // [kPinLifetime] after that.
-  final Duration photoAge;
-  // Who posted this report (shown in the pin popup and the Home feed):
-  // their position in [kUploaders].
-  final int uploaderIndex;
-  Uploader get uploader => kUploaders[uploaderIndex];
-  const FloodZone(
-    this.barangay,
-    this.point,
-    this.risk,
-    this.depthCm,
-    this.note,
-    this.updated, {
-    this.upVotes = 0,
-    this.downVotes = 0,
-    this.photoAge = Duration.zero,
-    this.uploaderIndex = 0,
-  });
-
-  /// Optional photo, e.g. assets/images/flood_dau.jpg or
-  /// flood_santa_ines.jpg. Missing files show a placeholder.
-  String get photo =>
-      'assets/images/flood_${barangay.toLowerCase().replaceAll(' ', '_')}.jpg';
-
-  // Worked out from "now" each time, so the sample dates stay recent.
-  DateTime get photoTakenAt => DateTime.now().subtract(photoAge);
-  Duration get timeLeft => kPinLifetime - photoAge;
-  bool get expired => timeLeft <= Duration.zero;
-}
-
-/// A resident who posts flood reports. Sample people (made-up names).
-class Uploader {
-  final String name;
-  final String barangay;
-  final int reports; // how many reports they've posted
-  final int upVotes; // thumbs up on all their reports
-  final int downVotes;
-  const Uploader(
-    this.name,
-    this.barangay,
-    this.reports,
-    this.upVotes,
-    this.downVotes,
-  );
-
-  /// "Rafael Dizon" -> "RD".
-  String get initials => name
-      .split(' ')
-      .where((w) => w.isNotEmpty)
-      .take(2)
-      .map((w) => w[0])
-      .join();
-}
-
-const List<Uploader> kUploaders = [
-  Uploader('Rafael Dizon', 'Dau', 14, 212, 9),
-  Uploader('Maricel Manalang', 'Tabun', 6, 88, 4),
-  Uploader('Jerome David', 'Mabiga', 9, 131, 7),
-  Uploader('Kristine Pangilinan', 'Duquit', 3, 27, 2),
-  Uploader('Paolo Lansangan', 'Dolores', 5, 46, 1),
-  Uploader('Andrea Tolentino', 'Camachiles', 8, 97, 6),
-];
-
-/// Set by "View on map" (Home feed): the Map tab opens this pin, then
-/// sets it back to null.
-final ValueNotifier<FloodZone?> focusedZone = ValueNotifier(null);
-
-/// Pins users post are deleted this long after their photo was taken, so
-/// old photos don't look like what's happening now.
+/// Flood reports are deleted this long after their photo was taken, so
+/// old photos don't look like what's happening now (FR-S1; the database
+/// does the deleting, see supabase/02_flood_reports.sql).
 const Duration kPinLifetime = Duration(days: 14);
-
-/// Sample pins. Use [activeFloodZones] to show them: it skips old ones.
-const List<FloodZone> kFloodZones = [
-  FloodZone(
-    'Dau',
-    LatLng(15.1761, 120.5887),
-    RiskLevel.high,
-    65,
-    'Low-lying streets near the creek are flooded above the knee.',
-    '12 min ago',
-    upVotes: 42,
-    downVotes: 3,
-    photoAge: Duration(hours: 5),
-    uploaderIndex: 0,
-  ),
-  FloodZone(
-    'Tabun',
-    LatLng(15.2477, 120.5659),
-    RiskLevel.moderate,
-    40,
-    'Water rising near the Sacobia riverbank.',
-    '25 min ago',
-    upVotes: 27,
-    downVotes: 5,
-    photoAge: Duration(days: 1, hours: 3),
-    uploaderIndex: 1,
-  ),
-  FloodZone(
-    'Mabiga',
-    LatLng(15.2133, 120.5799),
-    RiskLevel.moderate,
-    30,
-    'Some roads have ankle-to-knee deep water.',
-    '18 min ago',
-    upVotes: 19,
-    downVotes: 2,
-    photoAge: Duration(days: 3, hours: 7),
-    uploaderIndex: 2,
-  ),
-  FloodZone(
-    'Duquit',
-    LatLng(15.1779, 120.6014),
-    RiskLevel.normal,
-    0,
-    'No flooding reported.',
-    '1 hr ago',
-    upVotes: 8,
-    downVotes: 1,
-    photoAge: Duration(days: 9, hours: 2),
-    uploaderIndex: 3,
-  ),
-  FloodZone(
-    'Dolores',
-    LatLng(15.2161, 120.5589),
-    RiskLevel.normal,
-    5,
-    'Minor puddles only.',
-    '40 min ago',
-    upVotes: 11,
-    downVotes: 0,
-    photoAge: Duration(days: 12, hours: 20),
-    uploaderIndex: 4,
-  ),
-  FloodZone(
-    'Camachiles',
-    LatLng(15.1924, 120.5861),
-    RiskLevel.moderate,
-    25,
-    'Drainage is slow along the main road.',
-    '30 min ago',
-    upVotes: 15,
-    downVotes: 4,
-    photoAge: Duration(days: 6),
-    uploaderIndex: 5,
-  ),
-];
-
-/// Flood pins that haven't reached [kPinLifetime] yet.
-Iterable<FloodZone> get activeFloodZones =>
-    kFloodZones.where((z) => !z.expired);
 
 class EvacuationCenter {
   final String name;
   final String barangay;
   final LatLng point;
-  final int capacity;
-  final int occupants;
+  // No capacity / evacuee numbers (Nov 13 2026, Adrian): nobody can know
+  // how many people are inside, so the app doesn't pretend to.
   final bool open;
   final double distanceKm;
   final IconData icon;
@@ -314,15 +145,11 @@ class EvacuationCenter {
     this.name,
     this.barangay,
     this.point,
-    this.capacity,
-    this.occupants,
     this.open,
     this.distanceKm,
     this.icon,
     this.image,
   );
-
-  double get fill => occupants / capacity;
 }
 
 const List<EvacuationCenter> kEvacCenters = [
@@ -330,8 +157,6 @@ const List<EvacuationCenter> kEvacCenters = [
     'Mabalacat City Sports Complex',
     'Mabiga',
     LatLng(15.2100, 120.5760),
-    500,
-    186,
     true,
     2.1,
     CupertinoIcons.sportscourt_fill,
@@ -341,8 +166,6 @@ const List<EvacuationCenter> kEvacCenters = [
     'Mabalacat City Hall Grounds',
     'Poblacion',
     LatLng(15.2230, 120.5735),
-    350,
-    92,
     true,
     3.0,
     CupertinoIcons.building_2_fill,
@@ -352,8 +175,6 @@ const List<EvacuationCenter> kEvacCenters = [
     'Dau Elementary School',
     'Dau',
     LatLng(15.1790, 120.5860),
-    280,
-    241,
     true,
     1.4,
     CupertinoIcons.book_fill,
@@ -363,8 +184,6 @@ const List<EvacuationCenter> kEvacCenters = [
     'Dolores Covered Court',
     'Dolores',
     LatLng(15.2150, 120.5600),
-    200,
-    0,
     false,
     3.6,
     CupertinoIcons.house_alt_fill,
@@ -372,162 +191,23 @@ const List<EvacuationCenter> kEvacCenters = [
   ),
 ];
 
-enum AlertCategory {
-  flood('Flood', AgosIcons.flood),
-  weather('Weather', CupertinoIcons.cloud_bolt_rain_fill),
-  road('Road', CupertinoIcons.car_fill),
-  shelter('Shelter', CupertinoIcons.house_alt_fill);
-
-  final String label;
-  final IconData icon;
-  const AlertCategory(this.label, this.icon);
-}
-
-class AppAlert {
-  final String id;
-  final AlertCategory category;
-  final RiskLevel severity;
-  final String title;
-  final String summary;
-  final String details;
-  final List<String> actions;
-  final String area;
-  final String source;
-  final Duration ago;
-  const AppAlert({
-    required this.id,
-    required this.category,
-    required this.severity,
-    required this.title,
-    required this.summary,
-    required this.details,
-    required this.actions,
-    required this.area,
-    required this.source,
-    required this.ago,
-  });
-}
-
-/// Who posts the app's own alerts. The admins aren't confirmed yet (they
-/// may be Mabalacat officials later), so nothing claims to be official.
-const String kAdminSource = 'Admin (unofficial demo)';
-
-const List<AppAlert> kAlerts = [
-  AppAlert(
-    id: 'a1',
-    category: AlertCategory.flood,
-    severity: RiskLevel.high,
-    title: 'Flooding in Brgy. Dau',
-    summary: 'Knee-deep water on low-lying streets near the creek.',
-    details: 'Water levels in Brgy. Dau have reached around 1.8 m in low-lying areas near the creek. Residents in the affected streets are advised to prepare for possible evacuation.',
-    actions: [
-      'Move valuables and appliances to higher places',
-      'Prepare your go-bag',
-      'Evacuate to Dau Elementary School if water keeps rising',
-    ],
-    area: 'Brgy. Dau',
-    source: kAdminSource,
-    ago: Duration(minutes: 12),
-  ),
-  AppAlert(
-    id: 'a2',
-    category: AlertCategory.weather,
-    severity: RiskLevel.moderate,
-    title: 'Heavy Rainfall Advisory',
-    summary: 'Continuous moderate to heavy rain for the next 3 hours.',
-    details: 'Moderate to heavy rainfall is expected over Pampanga, including Mabalacat City, within the next 3 hours. Flooding is possible in low-lying areas and near rivers.',
-    actions: [
-      'Avoid crossing rivers and flooded roads',
-      'Keep your phone charged',
-      'Monitor updates in AgosAlert',
-    ],
-    area: 'Mabalacat City',
-    source: 'PAGASA',
-    ago: Duration(hours: 1, minutes: 5),
-  ),
-  AppAlert(
-    id: 'a3',
-    category: AlertCategory.road,
-    severity: RiskLevel.moderate,
-    title: 'MacArthur Hwy (Dau) not passable',
-    summary: 'Light vehicles should take an alternate route.',
-    details: 'A section of MacArthur Highway near Dau is flooded and not passable to light vehicles. Traffic is being rerouted.',
-    actions: ['Use an alternate route', 'Follow traffic enforcers on site'],
-    area: 'Brgy. Dau',
-    source: kAdminSource,
-    ago: Duration(hours: 2, minutes: 20),
-  ),
-  AppAlert(
-    id: 'a4',
-    category: AlertCategory.shelter,
-    severity: RiskLevel.normal,
-    title: 'Evacuation center now open',
-    summary: 'Mabalacat City Sports Complex is accepting evacuees.',
-    details: 'The Mabalacat City Sports Complex in Brgy. Mabiga is now open as an evacuation center. Bring your go-bag, IDs, and medicines.',
-    actions: [
-      'Bring IDs and medicines',
-      'Register at the help desk on arrival',
-    ],
-    area: 'Brgy. Mabiga',
-    source: kAdminSource,
-    ago: Duration(hours: 4),
-  ),
-  AppAlert(
-    id: 'a5',
-    category: AlertCategory.flood,
-    severity: RiskLevel.normal,
-    title: 'Water subsiding in Brgy. Duquit',
-    summary: 'Streets are passable again.',
-    details: 'Floodwater in Brgy. Duquit has fully subsided. Roads are now passable. Watch out for debris and mud.',
-    actions: ['Watch out for debris', 'Do not touch fallen power lines'],
-    area: 'Brgy. Duquit',
-    source: kAdminSource,
-    ago: Duration(days: 1, hours: 2),
-  ),
-];
-
-/// IDs of alerts the user has opened (shared by the Alerts tab and the bell).
-/// Starts with 'a5' already read, so the demo shows both read and unread
-/// alerts. It lives only in memory: reloading the page resets it.
-///
-/// A ValueNotifier holds a value and tells every ValueListenableBuilder
-/// watching it to rebuild when `.value` is set to something NEW. So to
-/// mark an alert as read, set a new Set, e.g.
-///   readAlerts.value = {...readAlerts.value, alert.id};
-/// Calling readAlerts.value.add(id) would change the set without
-/// notifying anyone, and the bell badge wouldn't update.
-final ValueNotifier<Set<String>> readAlerts = ValueNotifier({'a5'});
-
-/// How many alerts aren't in [readAlerts] yet (the number on the bell).
-int get unreadAlertCount =>
-    kAlerts.where((a) => !readAlerts.value.contains(a.id)).length;
-
-/// True after "Continue as guest". Guests can look around but can't vote
-/// or upload. Set by the login screen; there are no real accounts yet.
-bool isGuest = false;
-
 enum Vote { up, down }
 
-/// The user's thumbs up/down on flood pins, by barangay. Missing = no
-/// vote. Like [readAlerts]: set a NEW map to change it, and it resets
-/// when the page reloads.
+/// The user's thumbs up/down on flood reports, by report id. Missing = no
+/// vote. Set a NEW map to change it. Filled from the feed's my_vote
+/// (services/reports.dart) and saved in report_votes.
 final ValueNotifier<Map<String, Vote>> myVotes = ValueNotifier({});
 
 /// The user's own barangay, picked in the profile menu ("My barangay").
 /// null = not picked yet. Weather and Reports put it first, and the bell
-/// marks alerts for it. Memory only for now (resets on reload); it becomes
-/// a column on the user's row once Supabase is connected.
+/// marks alerts for it. Logged in = the `barangay` column of the user's
+/// row (services/auth.dart); guests keep it in memory only.
 final ValueNotifier<String?> myBarangay = ValueNotifier(null);
 
-/// The user's answer to "Still flooded?" on each report, by barangay:
+/// The user's answer to "Still flooded?" on each report, by report id:
 /// true = still flooded, false = the water's gone. Only the user's OWN
-/// answers (no made-up totals). Memory only, like [myVotes].
+/// answers (no made-up totals). Memory only until its table exists.
 final ValueNotifier<Map<String, bool>> stillFlooded = ValueNotifier({});
-
-/// Thumbs up/down other users gave on this user's uploads (the profile
-/// card). Sample numbers until there's a server.
-const int kMyUpVotesReceived = 128;
-const int kMyDownVotesReceived = 6;
 
 class Hotline {
   final String name;
@@ -671,7 +351,7 @@ const List<(String, String)> kFaqs = [
   ),
   (
     'How do I call a hotline?',
-    'Open the Assistance tab and tap any hotline. Your phone will ask you to confirm before calling.',
+    'Open the Help tab and tap any hotline. Your phone will ask you to confirm before calling.',
   ),
   (
     'What should I do when a High alert appears?',

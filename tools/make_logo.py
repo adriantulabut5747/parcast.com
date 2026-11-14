@@ -1,23 +1,24 @@
 """Draws the AgosAlert logo and writes every logo file the app uses.
 
-The mark ("Current Alert"): an exclamation mark whose dot is a wave, so
-the alert is the water. Black (or white) stem, kBlue wave. The wordmark is
-the mark + "agosalert." in Inter ExtraBold (turned into outlines here) with
-a blue dot. Everything is built from circles and arcs, no hand-drawn curves.
+The mark (Nov 13 2026, "A + current"): the A of AgosAlert whose crossbar
+is a kBlue wave running past both legs, like a current through it. Black
+(or white) A, cut around the wave by a thin gap. The wordmark is the mark
++ "agosalert." in Inter ExtraBold (turned into outlines here) with a blue
+dot. Built from stroked centerlines (skia-pathops), no hand-drawn outlines.
 
 Edit the numbers here and rerun; never edit the PNGs or SVGs by hand:
     python tools/make_logo.py
 
 Writes: brand/*.svg (masters), assets/images/logo_*.png, web favicon and
 PWA icons, and the landing page copies. Needs Google Chrome (renders the
-SVGs to PNG), Pillow and fontTools.
+SVGs to PNG), Pillow, fontTools and skia-pathops.
 """
 
-import math
 import pathlib
 import subprocess
 import tempfile
 
+import pathops
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
@@ -36,46 +37,53 @@ def f(n: float) -> str:
     return f"{n:.2f}".rstrip("0").rstrip(".")
 
 
-def stem(cx, y1, r1, y2, r2) -> str:
-    """The exclamation stem: a circle of radius r1 at the top joined to a
-    smaller one (r2) lower down by their exact tangent lines (a taper)."""
-    s = (r1 - r2) / (y2 - y1)
-    c = math.sqrt(1 - s * s)
-    return (
-        f"M{f(cx - r1 * c)} {f(y1 + r1 * s)}A{f(r1)} {f(r1)} 0 1 1 {f(cx + r1 * c)} {f(y1 + r1 * s)}"
-        f"L{f(cx + r2 * c)} {f(y2 + r2 * s)}A{f(r2)} {f(r2)} 0 0 1 {f(cx - r2 * c)} {f(y2 + r2 * s)}Z"
-    )
+def _stroked(start, segments, width):
+    """A centerline stroked with round ends and joins, as a filled pathops
+    path. segments: (x, y) for a line, or three points for a cubic curve."""
+    p = pathops.Path()
+    pen = p.getPen()
+    pen.moveTo(start)
+    for seg in segments:
+        if len(seg) == 3:
+            pen.curveTo(*seg)
+        else:
+            pen.lineTo(seg)
+    pen.endPath()
+    p.stroke(width, pathops.LineCap.ROUND_CAP, pathops.LineJoin.ROUND_JOIN, 4)
+    p.convertConicsToQuads()  # round ends come out as conics; SVGPathPen can't write those
+    return p
 
 
-def wave(cx, cy, a, amp, t) -> str:
-    """One wave as a filled shape of even thickness t: a crest arc and a
-    trough arc of the same radius meeting at (cx, cy), round ends. a = a
-    quarter of the wave's length, amp = how far the crest rises."""
-    b = (a * a - amp * amp) / (2 * amp)
-    R, h = b + amp, t / 2
-    ux, uy = a / R, b / R
-    c1, c2 = (cx - a, cy + b), (cx + a, cy - b)
+def _wave_line(cx, cy, a, amp):
+    """Centerline of one wave (crest on the left, then trough), 4a long.
+    Handles at 0.36 / 0.64 of each half give a smooth, even hump."""
+    def hump(x0, dy):
+        return (x0 + 2 * a * 0.36, cy + dy * 1.33), (x0 + 2 * a * 0.64, cy + dy * 1.33), (x0 + 2 * a, cy)
 
-    def p(c, r, sx, sy):
-        return f"{f(c[0] + r * sx * ux)} {f(c[1] + r * sy * uy)}"
+    return (cx - 2 * a, cy), [hump(cx - 2 * a, -amp), hump(cx, amp)]
 
-    return (
-        f"M{p(c1, R + h, -1, -1)}A{f(R + h)} {f(R + h)} 0 0 1 {p(c1, R + h, 1, -1)}"
-        f"A{f(R - h)} {f(R - h)} 0 0 0 {p(c2, R - h, 1, 1)}"
-        f"A{f(h)} {f(h)} 0 0 1 {p(c2, R + h, 1, 1)}"
-        f"A{f(R + h)} {f(R + h)} 0 0 1 {p(c2, R + h, -1, 1)}"
-        f"A{f(R - h)} {f(R - h)} 0 0 0 {p(c1, R - h, -1, -1)}"
-        f"A{f(h)} {f(h)} 0 0 1 {p(c1, R + h, -1, -1)}Z"
-    )
+
+def _svg(path) -> str:
+    pen = SVGPathPen(None, ntos=f)
+    path.draw(pen)
+    return pen.getCommands()
 
 
 def mark_paths(small=False, thin=0.0):
-    """(stem path, wave path) on a 256 grid. small = the heavier cut for
-    32 px and below. thin = units taken off for white-on-dark (light
-    shapes on dark look heavier)."""
+    """(ink path, wave path) on a 256 grid: the "A" of AgosAlert whose
+    crossbar is a wave, running past both legs like a current through it.
+    The A is cut around the wave (a thin gap) so blue and ink never merge
+    at small sizes. small = the heavier cut for 32 px and below. thin =
+    units taken off for white-on-dark (light shapes on dark look heavier)."""
     if small:
-        return stem(128, 42, 32 - thin, 112, 26 - thin), wave(128, 198, 33, 15, 44 - 2 * thin)
-    return stem(128, 42, 26 - thin, 138, 20 - thin), wave(128, 200, 29, 16, 36 - 2 * thin)
+        t, wt, gap, wy, a, amp = 44, 34, 6, 168, 36, 15
+    else:
+        t, wt, gap, wy, a, amp = 34, 26, 8, 166, 34, 14
+    t, wt = t - 2 * thin, wt - 2 * thin
+    legs = _stroked((60, 222), [(128, 42), (196, 222)], t)
+    start, line = _wave_line(128, wy, a, amp)
+    ink = pathops.op(legs, _stroked(start, line, wt + 2 * gap), pathops.PathOp.DIFFERENCE)
+    return _svg(ink), _svg(_stroked(start, line, wt))
 
 
 def mark_svg(ink=INK, accent=BLUE, small=False, thin=0.0, box="0 0 256 256", extra="") -> str:
@@ -94,7 +102,7 @@ def tile_svg(bg, ink, small=False, thin=0.0) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><title>AgosAlert</title>'
         f'<rect width="256" height="256" rx="57.3" fill="{bg}"/>'
-        f'<g transform="translate({f(off)} {f(off + 4)}) scale({k})">'
+        f'<g transform="translate({f(off)} {f(off - 3)}) scale({k})">'
         f'<path fill="{ink}" d="{s}"/><path fill="{BLUE}" d="{w}"/></g></svg>'
     )
 
@@ -122,7 +130,7 @@ def text_path(text, x, baseline, size, tracking=-0.045):
 
 
 TEXT_SIZE = 170
-MARK_LEFT = 50  # left edge of the wave on the 256 grid (with a little air)
+MARK_LEFT = 34  # left edge of the A on the 256 grid (with a little air)
 
 
 def horizontal_svg(ink, text, thin=0.0) -> str:
@@ -224,6 +232,22 @@ def main() -> None:
         # the middle ~60% of a full black square.
         mask = mark_svg(ink=PAPER, thin=1, box="-86 -86 428 428", extra='<rect x="-86" y="-86" width="428" height="428"/>')
         render(mask, ROOT / f"web/icons/Icon-maskable-{size}.png", size)
+
+    # The loading screen (web/index.html) draws the app-icon mark itself, so
+    # its water can fill the A: write the two paths (and the A as a clip
+    # path) between its LOGO:START / LOGO:END markers.
+    s, w = mark_paths(thin=1)
+    g = 'transform="translate(33.28 30.28) scale(0.74)"'  # same as tile_svg
+    defs = (
+        '<!-- LOGO:START -->\n    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>'
+        f'<path id="agInk" {g} d="{s}"/><path id="agWave" {g} d="{w}"/>'
+        f'<clipPath id="aShape"><path {g} d="{s}"/></clipPath></defs></svg>\n    <!-- LOGO:END -->'
+    )
+    page = ROOT / "web/index.html"
+    html = page.read_text(encoding="utf-8")
+    a, b = html.index("<!-- LOGO:START -->"), html.index("<!-- LOGO:END -->") + len("<!-- LOGO:END -->")
+    page.write_text(html[:a] + defs + html[b:], encoding="utf-8")
+    print("web/index.html (loading screen mark)")
 
     # The landing page uses its own copies.
     landing = ROOT / "landing/img"

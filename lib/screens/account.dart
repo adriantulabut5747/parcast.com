@@ -1,43 +1,22 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
-import '../data/demo_data.dart';
-import '../services/session.dart';
+import '../services/auth.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
-import 'home_shell.dart';
+import 'login_screen.dart';
 
 /// ============================================================
 /// ACCOUNT — logging in and out
 /// ============================================================
 ///
-/// The app has no login screen of its own: logging in happens on the
-/// landing page (`landing/index.html`), which opens the app as a user or
-/// a guest (see services/session.dart). So on the website, "Log in" and
-/// "Log out" both go back to the landing page.
-///
-/// An installed phone app has no landing page to go to, so there they
-/// just restart the app as a user or a guest. Fine for a demo; a real
-/// app would get its own login screen once there's a backend.
+/// The login screen itself is screens/login_screen.dart; the Supabase
+/// calls are in services/auth.dart.
 
-/// Goes to the landing page with its login popup open.
+/// Opens the login screen on top of the guest's app ("Continue as
+/// guest" there comes back here).
 void logIn(BuildContext context) {
-  if (kIsWeb) {
-    goToLanding(openLogin: true);
-    return;
-  }
-  _restartAs(context, guest: false);
-}
-
-void _restartAs(BuildContext context, {required bool guest}) {
-  isGuest = guest;
-  // A different person may be using the app now: forget the votes.
-  myVotes.value = {};
-  // pushAndRemoveUntil(..., (_) => false) removes every screen behind the
-  // new one, so the back button can't return to the old session.
-  Navigator.of(context)
-      .pushAndRemoveUntil(slideRoute(const HomeShell()), (_) => false);
+  Navigator.of(context).push(slideRoute(const LoginScreen()));
 }
 
 /// Popup for guests who tap something only logged-in users can do, like
@@ -72,14 +51,14 @@ Future<void> showLoginRequired(BuildContext context, {required String action}) {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: c.textPrimary,
-                        fontSize: 19,
+                        fontSize: 20,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Guests can only view. Log in or sign up to join in '
-                      'and help your community.',
+                      'Guests can only look around. A free account lets '
+                      'you report floods and vote on reports.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: c.textSecondary,
@@ -89,7 +68,7 @@ Future<void> showLoginRequired(BuildContext context, {required String action}) {
                     ),
                     const SizedBox(height: 20),
                     PrimaryButton(
-                      label: 'Log in',
+                      label: 'Log in or sign up',
                       icon: CupertinoIcons.arrow_right,
                       onPressed: () {
                         Navigator.of(dialogContext).pop();
@@ -97,12 +76,9 @@ Future<void> showLoginRequired(BuildContext context, {required String action}) {
                       },
                     ),
                     const SizedBox(height: 4),
-                    TextButton(
+                    SecondaryButton(
+                      label: 'Not now',
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: Text(
-                        'Not now',
-                        style: TextStyle(color: c.textSecondary),
-                      ),
                     ),
                   ],
                 ),
@@ -122,8 +98,8 @@ Future<void> showLoginRequired(BuildContext context, {required String action}) {
   );
 }
 
-/// Asks "Log out?" and, if confirmed, goes back to the landing page.
-/// Used by the More tab and by the profile menu in the desktop top bar.
+/// Asks "Log out?" and, if confirmed, signs out and shows the login
+/// screen. Used by the profile menu.
 void confirmLogout(BuildContext context) {
   showAppSheet(
     context,
@@ -143,25 +119,28 @@ void confirmLogout(BuildContext context) {
           ),
           const SizedBox(height: 4),
           Text(
-            'You\'ll stop getting alerts on this device.',
+            'You\'ll go back to the login screen.',
             style: TextStyle(color: c.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 20),
           PrimaryButton(
             label: 'Log out',
             color: kDanger,
-            onPressed: () {
-              if (kIsWeb) {
-                goToLanding();
-              } else {
-                _restartAs(context, guest: true);
-              }
+            onPressed: () async {
+              final nav = Navigator.of(context);
+              await logOut();
+              // Removes every screen behind it, so Back can't return to
+              // the logged-in app.
+              nav.pushAndRemoveUntil(
+                slideRoute(const LoginScreen()),
+                (_) => false,
+              );
             },
           ),
           const SizedBox(height: 6),
-          TextButton(
+          SecondaryButton(
+            label: 'Cancel',
             onPressed: () => Navigator.of(sheet).pop(),
-            child: Text('Cancel', style: TextStyle(color: c.textSecondary)),
           ),
         ],
       );

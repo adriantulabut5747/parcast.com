@@ -390,9 +390,9 @@ class DepthReadout extends StatelessWidget {
           caption.toUpperCase(),
           style: TextStyle(
             color: c.textSecondary,
-            fontSize: 10.5,
+            fontSize: 11,
             fontWeight: FontWeight.w800,
-            letterSpacing: 1,
+            letterSpacing: 0.6,
           ),
         ),
         const SizedBox(height: 6),
@@ -402,7 +402,7 @@ class DepthReadout extends StatelessWidget {
               TextSpan(
                 text: cm == null ? '—' : '${cm.round()}',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 34,
                   fontWeight: FontWeight.w800,
                   height: 1,
                   letterSpacing: -0.5,
@@ -411,7 +411,7 @@ class DepthReadout extends StatelessWidget {
               ),
               const TextSpan(
                 text: ' cm',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -420,7 +420,7 @@ class DepthReadout extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           cm == null ? 'Drag the water line' : '≈ ${formatFt(cm)}',
-          style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+          style: TextStyle(color: c.textSecondary, fontSize: 13),
         ),
         const SizedBox(height: 14),
         Row(
@@ -436,7 +436,7 @@ class DepthReadout extends StatelessWidget {
                 cm == null ? 'Not set' : FloodLevel.of(cm).label,
                 style: TextStyle(
                   color: c.textPrimary,
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -457,7 +457,7 @@ class DepthReadout extends StatelessWidget {
                 cm == null ? '—' : vehicleAdvice(cm),
                 style: TextStyle(
                   color: c.textPrimary,
-                  fontSize: 12.5,
+                  fontSize: 13,
                   height: 1.3,
                 ),
               ),

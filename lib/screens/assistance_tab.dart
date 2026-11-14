@@ -8,6 +8,7 @@ import '../widgets/common.dart';
 import '../widgets/responsive.dart';
 import '../widgets/check_in.dart';
 import '../widgets/links.dart';
+import '../widgets/tugak.dart';
 import 'evacuation_centers_screen.dart';
 import '../widgets/agos_icons.dart';
 
@@ -72,7 +73,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
     final shelter = _nearestShelter(context, c);
     final note = Text(
       'Hotline numbers are from Mabalacat City government channels. Check them locally before you rely on them.',
-      style: TextStyle(color: c.textSecondary, fontSize: 11.5, height: 1.45),
+      style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.45),
     );
     const header = PageHeader(
       'Help',
@@ -207,7 +208,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: c.textPrimary,
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -272,7 +273,8 @@ class _AssistanceTabState extends State<AssistanceTab> {
                 fontFamily: kDisplayFont,
                 color: c.textPrimary,
                 fontSize: 22,
-                fontWeight: FontWeight.w800,
+                letterSpacing: displayTracking(22),
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
@@ -317,7 +319,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
                     h.name,
                     style: TextStyle(
                       color: c.textPrimary,
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -372,17 +374,14 @@ class _AssistanceTabState extends State<AssistanceTab> {
                         e.name,
                         style: TextStyle(
                           color: c.textPrimary,
-                          fontSize: 14.5,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 1),
                       Text(
                         'Brgy. ${e.barangay} · Open',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12.5,
-                        ),
+                        style: TextStyle(color: c.textSecondary, fontSize: 13),
                       ),
                     ],
                   ),
@@ -446,7 +445,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
                 style: TextStyle(
                   color: c.textPrimary,
                   fontWeight: FontWeight.w600,
-                  fontSize: 14,
+                  fontSize: 15,
                 ),
               ),
               const SizedBox(height: 2),
@@ -501,6 +500,11 @@ class _AssistanceTabState extends State<AssistanceTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SectionHeader('Be ready'),
+        const TugakBeside(
+          pose: 'handset',
+          line: "Do the Before list today, while it's dry. Once the water rises, there's no time to read.",
+        ),
+        const SizedBox(height: 16),
         _PhaseTimeline(
           selected: _phase,
           onSelect: (i) => setState(() => _phase = i),
@@ -550,8 +554,9 @@ class _AssistanceTabState extends State<AssistanceTab> {
                   style: TextStyle(
                     fontFamily: kDisplayFont,
                     color: c.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    letterSpacing: displayTracking(17),
                   ),
                 ),
               ),
@@ -569,7 +574,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
           const SizedBox(height: 2),
           Text(
             'Keep it by the door. Ticks are saved on this device.',
-            style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+            style: TextStyle(color: c.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 12),
           // One segment per item: you see what's left at a glance.
@@ -661,7 +666,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
                         color: packed ? c.textSecondary : c.textPrimary,
                         decoration: packed ? TextDecoration.lineThrough : null,
                         decorationColor: c.textSecondary,
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -763,7 +768,7 @@ class _PhaseTimeline extends StatelessWidget {
                                   color: i == selected
                                       ? c.textPrimary
                                       : c.textSecondary,
-                                  fontSize: 14,
+                                  fontSize: 15,
                                   fontWeight: i == selected
                                       ? FontWeight.w700
                                       : FontWeight.w500,
@@ -775,7 +780,7 @@ class _PhaseTimeline extends StatelessWidget {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: c.textSecondary,
-                                  fontSize: 11.5,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
@@ -864,14 +869,15 @@ class _DepthDiagram extends StatelessWidget {
             style: TextStyle(
               fontFamily: kDisplayFont,
               color: c.textPrimary,
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              fontSize: 17,
+              letterSpacing: displayTracking(17),
             ),
           ),
           const SizedBox(height: 2),
           Text(
             'If it is flowing, don\'t walk or drive through it.',
-            style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+            style: TextStyle(color: c.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 16),
           Row(
@@ -902,7 +908,7 @@ class _DepthDiagram extends StatelessWidget {
                           ],
                         ),
                         style: const TextStyle(
-                          fontSize: 13.5,
+                          fontSize: 15,
                           fontFeatures: [FontFeature.tabularFigures()],
                         ),
                       ),
@@ -1006,7 +1012,7 @@ void showSosSheet(BuildContext context) {
                         style: TextStyle(
                           color: c.textPrimary,
                           fontWeight: FontWeight.w700,
-                          fontSize: 14,
+                          fontSize: 15,
                         ),
                       ),
                     ),
@@ -1015,7 +1021,7 @@ void showSosSheet(BuildContext context) {
                       style: TextStyle(
                         color: h.color,
                         fontWeight: FontWeight.w800,
-                        fontSize: 14,
+                        fontSize: 15,
                       ),
                     ),
                   ],
@@ -1075,7 +1081,7 @@ void rescueSheet(BuildContext context) {
                           'Rescuers will come to your barangay',
                           style: TextStyle(
                             color: c.textSecondary,
-                            fontSize: 12.5,
+                            fontSize: 13,
                           ),
                         ),
                       ],
@@ -1105,7 +1111,7 @@ void rescueSheet(BuildContext context) {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: c.textPrimary,
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -1322,9 +1328,9 @@ class _SosButtonState extends State<_SosButton> with TickerProviderStateMixin {
                               style: TextStyle(
                                 fontFamily: kDisplayFont,
                                 color: Colors.white,
-                                fontSize: 30,
-                                letterSpacing: 1,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 28,
+                                letterSpacing: 1, // all caps: open it up
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -1341,8 +1347,9 @@ class _SosButtonState extends State<_SosButton> with TickerProviderStateMixin {
               style: TextStyle(
                 fontFamily: kDisplayFont,
                 color: c.textPrimary,
-                fontSize: 19,
-                fontWeight: FontWeight.w800,
+                fontSize: 20,
+                letterSpacing: displayTracking(20),
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),

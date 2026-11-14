@@ -1,6 +1,8 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
-import '../data/demo_data.dart';
+import '../services/auth.dart';
+import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/skeleton.dart';
 import 'account.dart';
@@ -47,6 +49,56 @@ void openReportIncident(BuildContext context) {
   );
 }
 
+/// Phones: the round + above the bottom nav's right end (Reports and Map,
+/// Nov 14 2026, replaced the Reports composer). Opens the report form.
+/// Wider screens get a "Report flooding" button instead.
+class ReportFab extends StatelessWidget {
+  const ReportFab({super.key});
+
+  static const double size = 56;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Report flooding',
+      excludeSemantics: true,
+      child: Tooltip(
+        message: 'Report flooding',
+        child: PressableScale(
+          onTap: () => openReportIncident(context),
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: kBlue,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0A3D80).withValues(alpha: 0.45),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: CustomPaint(
+              foregroundPainter: const GlassEdgePainter(
+                radius: size / 2,
+                dark: true,
+              ),
+              child: const Icon(
+                CupertinoIcons.add,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Downloads the other tabs' code (Map, Reports, Help), the bell's
 /// notifications and Report incident in the background, so they open
 /// instantly later. Errors are ignored: if it fails, they'll
@@ -83,7 +135,7 @@ Widget deferredReportsTab() => DeferredView(
 Widget deferredHelpTab() => DeferredView(
   load: assistance.loadLibrary,
   builder: () => assistance.AssistanceTab(),
-  placeholder: const ListPageSkeleton(),
+  placeholder: const HelpPageSkeleton(),
 );
 
 /// The bell: opens the notifications sheet (downloading it the first time;

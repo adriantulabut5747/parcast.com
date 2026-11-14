@@ -17,3 +17,9 @@ Future<bool> shareText(String text) async {
   }
   return true;
 }
+
+/// Loads the page again. Used when a split-off part of the app fails to
+/// download, which happens when a new version was published while this
+/// tab was open: the old app asks for part files that no longer exist,
+/// and only a reload gets the new app with matching parts.
+void reloadPage() => web.window.location.reload();

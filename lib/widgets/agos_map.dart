@@ -67,6 +67,10 @@ class AgosMapController {
   /// Degrees the map is tilted (0 = looking straight down).
   final pitch = ValueNotifier<double>(0);
 
+  /// The middle of the map, updated when it stops moving (the report
+  /// form's "drag the map under the pin"). null until the map moved.
+  final center = ValueNotifier<LatLng?>(null);
+
   void attach(MapBackend b) => _backend = b;
   void detach(MapBackend b) {
     if (_backend == b) _backend = null;
@@ -81,5 +85,6 @@ class AgosMapController {
   void dispose() {
     bearing.dispose();
     pitch.dispose();
+    center.dispose();
   }
 }

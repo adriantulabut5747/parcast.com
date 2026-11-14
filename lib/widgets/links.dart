@@ -49,7 +49,7 @@ Future<void> confirmCall(
             number,
             style: TextStyle(
               color: color,
-              fontSize: 26,
+              fontSize: 28,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.5,
             ),
@@ -74,9 +74,9 @@ Future<void> confirmCall(
             },
           ),
           const SizedBox(height: 8),
-          TextButton(
+          SecondaryButton(
+            label: 'Cancel',
             onPressed: () => Navigator.of(sheet).pop(),
-            child: Text('Cancel', style: TextStyle(color: c.textSecondary)),
           ),
         ],
       );

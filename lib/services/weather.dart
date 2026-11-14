@@ -22,6 +22,12 @@ class HourlyForecast {
   final bool isDay;
   final int humidity; // %
   final double windSpeed; // km/h
+  final double feelsLike;
+  final int windDir; // degrees the wind comes FROM (0 = north)
+  final double pressure; // hPa at sea level
+  final int cloud; // % of the sky covered
+  final double uv; // UV index
+  final double visibility; // meters
   const HourlyForecast(
     this.time,
     this.temperature,
@@ -31,6 +37,12 @@ class HourlyForecast {
     this.isDay,
     this.humidity,
     this.windSpeed,
+    this.feelsLike,
+    this.windDir,
+    this.pressure,
+    this.cloud,
+    this.uv,
+    this.visibility,
   );
 }
 
@@ -41,6 +53,8 @@ class DailyForecast {
   final int rainChance; // %
   final double rainSum; // mm
   final int weatherCode;
+  final DateTime sunrise;
+  final DateTime sunset;
   const DailyForecast(
     this.date,
     this.max,
@@ -48,6 +62,8 @@ class DailyForecast {
     this.rainChance,
     this.rainSum,
     this.weatherCode,
+    this.sunrise,
+    this.sunset,
   );
 }
 
@@ -59,8 +75,15 @@ class MabalacatWeather {
   final double windSpeed; // km/h
   final int weatherCode; // WMO code, see weatherInfo()
   final bool isDay;
+  final int windDir; // degrees the wind comes FROM
+  final double gusts; // km/h
+  final double pressure; // hPa
+  final int cloud; // %
+  final double uv;
+  final double visibility; // meters
   final DateTime time; // local Manila time
   final List<HourlyForecast> hourly; // next 24 hours
+  final List<(DateTime, double)> pastRain; // the 24 hours before this one
   final List<DailyForecast> daily; // today + next days
   // Rain in each 15 minutes of the next 2 hours: (start time, mm).
   // Open-Meteo makes these from its forecast models (outside Europe and
@@ -75,8 +98,15 @@ class MabalacatWeather {
     required this.windSpeed,
     required this.weatherCode,
     required this.isDay,
+    required this.windDir,
+    required this.gusts,
+    required this.pressure,
+    required this.cloud,
+    required this.uv,
+    required this.visibility,
     required this.time,
     required this.hourly,
+    required this.pastRain,
     required this.daily,
     required this.nextTwoHours,
   });
@@ -110,15 +140,23 @@ class MabalacatWeather {
     'longitude': '120.5714',
     'current':
         'temperature_2m,relative_humidity_2m,apparent_temperature,'
-        'precipitation,weather_code,wind_speed_10m,is_day',
+        'precipitation,weather_code,wind_speed_10m,is_day,'
+        'wind_direction_10m,wind_gusts_10m,pressure_msl,cloud_cover,'
+        'uv_index,visibility',
     'hourly':
         'temperature_2m,precipitation_probability,precipitation,'
-        'weather_code,is_day,relative_humidity_2m,wind_speed_10m',
+        'weather_code,is_day,relative_humidity_2m,wind_speed_10m,'
+        'apparent_temperature,wind_direction_10m,pressure_msl,'
+        'cloud_cover,uv_index,visibility',
+    // The rain chart needs the last 24 hours too; 25 ahead covers the
+    // current hour + the next 24.
+    'past_hours': '24',
+    'forecast_hours': '25',
     'minutely_15': 'precipitation',
     'forecast_minutely_15': '9', // the current quarter + the next 2 hours
     'daily':
         'weather_code,temperature_2m_max,temperature_2m_min,'
-        'precipitation_probability_max,precipitation_sum',
+        'precipitation_probability_max,precipitation_sum,sunrise,sunset',
     'forecast_days': '5',
     'timezone': 'Asia/Manila',
   });
@@ -193,14 +231,16 @@ class MabalacatWeather {
     // null there (it sometimes has gaps).
     num n(List list, int i) => (list[i] as num?) ?? 0;
 
-    // Hourly data starts at midnight today; keep the next 24 hours.
-    // Hours before the current hour are skipped with `continue`, and the
-    // loop stops once 24 hours are collected.
+    // Hourly data starts 24 hours ago: those hours go to `pastRain`, then
+    // the next 24 (from the current hour) to `hourly`.
     final hTimes = (h['time'] as List).cast<String>();
     final hourly = <HourlyForecast>[];
+    final pastRain = <(DateTime, double)>[];
+    final thisHour = DateTime(now.year, now.month, now.day, now.hour);
     for (var i = 0; i < hTimes.length && hourly.length < 24; i++) {
       final t = DateTime.parse(hTimes[i]);
-      if (t.isBefore(DateTime(now.year, now.month, now.day, now.hour))) {
+      if (t.isBefore(thisHour)) {
+        pastRain.add((t, n(h['precipitation'], i).toDouble()));
         continue;
       }
       hourly.add(
@@ -213,6 +253,12 @@ class MabalacatWeather {
           n(h['is_day'], i) == 1,
           n(h['relative_humidity_2m'], i).toInt(),
           n(h['wind_speed_10m'], i).toDouble(),
+          n(h['apparent_temperature'], i).toDouble(),
+          n(h['wind_direction_10m'], i).toInt(),
+          n(h['pressure_msl'], i).toDouble(),
+          n(h['cloud_cover'], i).toInt(),
+          n(h['uv_index'], i).toDouble(),
+          n(h['visibility'], i).toDouble(),
         ),
       );
     }
@@ -227,6 +273,8 @@ class MabalacatWeather {
           n(d['precipitation_probability_max'], i).toInt(),
           n(d['precipitation_sum'], i).toDouble(),
           n(d['weather_code'], i).toInt(),
+          DateTime.parse(d['sunrise'][i] as String),
+          DateTime.parse(d['sunset'][i] as String),
         ),
     ];
 
@@ -251,8 +299,15 @@ class MabalacatWeather {
       windSpeed: (cur['wind_speed_10m'] as num).toDouble(),
       weatherCode: (cur['weather_code'] as num).toInt(),
       isDay: cur['is_day'] == 1,
+      windDir: ((cur['wind_direction_10m'] as num?) ?? 0).toInt(),
+      gusts: ((cur['wind_gusts_10m'] as num?) ?? 0).toDouble(),
+      pressure: ((cur['pressure_msl'] as num?) ?? 0).toDouble(),
+      cloud: ((cur['cloud_cover'] as num?) ?? 0).toInt(),
+      uv: ((cur['uv_index'] as num?) ?? 0).toDouble(),
+      visibility: ((cur['visibility'] as num?) ?? 0).toDouble(),
       time: now,
       hourly: hourly,
+      pastRain: pastRain,
       daily: daily,
       nextTwoHours: nextTwoHours,
     );
@@ -295,6 +350,72 @@ class MabalacatWeather {
   }
 }
 
+/// Air quality now, from Open-Meteo's free Air Quality API (CAMS model
+/// data, not a local sensor).
+class AirQuality {
+  final int usAqi; // US EPA Air Quality Index
+  final double pm25; // µg/m³
+  final double pm10; // µg/m³
+  const AirQuality(this.usAqi, this.pm25, this.pm10);
+
+  static final _url = Uri.https(
+    'air-quality-api.open-meteo.com',
+    '/v1/air-quality',
+    {
+      'latitude': '15.2236',
+      'longitude': '120.5714',
+      'current': 'us_aqi,pm2_5,pm10',
+      'timezone': 'Asia/Manila',
+    },
+  );
+
+  static Future<AirQuality>? _cached;
+
+  /// Shared like [MabalacatWeather.load]; a failure is forgotten so the
+  /// next call (e.g. pull to refresh) tries again.
+  static Future<AirQuality> load({bool refresh = false}) {
+    if (refresh || _cached == null) {
+      final request = _fetch();
+      _cached = request;
+      request.then(
+        (_) {},
+        onError: (Object _) {
+          if (identical(_cached, request)) _cached = null;
+        },
+      );
+    }
+    return _cached!;
+  }
+
+  static Future<AirQuality> _fetch() async {
+    final res = await http.get(_url).timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) {
+      throw Exception('Air quality API returned ${res.statusCode}');
+    }
+    final cur =
+        (jsonDecode(res.body) as Map<String, dynamic>)['current']
+            as Map<String, dynamic>;
+    return AirQuality(
+      (cur['us_aqi'] as num).toInt(),
+      (cur['pm2_5'] as num).toDouble(),
+      (cur['pm10'] as num).toDouble(),
+    );
+  }
+
+  /// The US EPA category for the index.
+  String get label => usAqi <= 50
+      ? 'Good'
+      : usAqi <= 100
+      ? 'Moderate'
+      : usAqi <= 150
+      ? 'Unhealthy for sensitive groups'
+      : usAqi <= 200
+      ? 'Unhealthy'
+      : usAqi <= 300
+      ? 'Very unhealthy'
+      : 'Hazardous';
+}
+
 class FloodOutlook {
   final RiskLevel level;
   final String title;
@@ -330,15 +451,16 @@ class FloodOutlook {
   return ('Thunderstorm', CupertinoIcons.cloud_bolt_rain_fill);
 }
 
-/// The sky card's colors, like looking up: blue on a clear day, slate when
-/// it rains, dark storm gray, deep indigo at night. White text reads on
-/// all of them.
+/// The sky card's colors: all deep navy (Nov 13 2026, Adrian swapped the
+/// bright day blue for dark blue), shifting with the weather: brightest
+/// on a clear day, grayer when cloudy or raining, near black in a storm,
+/// indigo at night. White text reads on all of them.
 List<Color> weatherGradient(int code, bool isDay) {
-  if (code >= 95) return const [Color(0xFF3B404F), Color(0xFF16181F)];
-  if (code >= 51) return const [Color(0xFF4A6375), Color(0xFF1E2A33)];
-  if (!isDay) return const [Color(0xFF262C66), Color(0xFF0C0F2B)];
-  if (code >= 3) return const [Color(0xFF5B6675), Color(0xFF2B323C)];
-  return const [Color(0xFF3F8AE6), Color(0xFF173F80)];
+  if (code >= 95) return const [Color(0xFF1A2033), Color(0xFF07090F)];
+  if (code >= 51) return const [Color(0xFF1B2B42), Color(0xFF09111D)];
+  if (!isDay) return const [Color(0xFF16194A), Color(0xFF05061A)];
+  if (code >= 3) return const [Color(0xFF1E3150), Color(0xFF0A1426)];
+  return const [Color(0xFF1C3D72), Color(0xFF081633)];
 }
 
 // 24-hour to 12-hour clock: `% 12` is the remainder after dividing by 12

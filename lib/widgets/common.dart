@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/cupertino.dart'
+    show CupertinoActivityIndicator, CupertinoIcons;
 
 import 'dart:ui';
 
@@ -15,8 +16,12 @@ import 'responsive.dart';
 /// SHARED WIDGETS — the building blocks every screen uses
 /// ============================================================
 
-/// The page background: plain black (or iOS light gray) with faint water
-/// lines across the top.
+/// The page background. Dark (Nov 14 2026): the landing page's night sky
+/// (landing.css .sky): two navy glows over a navy-to-black fade, and still
+/// stars painted once (no twinkle: any loop redraws the whole web app every
+/// frame). Light: warm off-white with two soft blue glows and faint water
+/// lines across the top. (The film grain was removed Nov 13 2026: ~20k
+/// dots redrawn every frame made each frame ~40% slower on desktop.)
 class PageBackground extends StatelessWidget {
   final Widget child;
   const PageBackground({required this.child, super.key});
@@ -24,28 +29,116 @@ class PageBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColors(context);
+    Widget glow(Alignment at, Color color, double alpha, [double r = 1.1]) =>
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: at,
+                radius: r,
+                colors: [
+                  color.withValues(alpha: alpha),
+                  color.withValues(alpha: 0),
+                ],
+              ),
+            ),
+          ),
+        );
     // Fill the whole screen, even when the child (e.g. a scroll view) is
     // shorter — otherwise the area below it shows as a blank strip.
     return Container(
       width: double.infinity,
       height: double.infinity,
-      color: c.background,
+      decoration: BoxDecoration(
+        color: c.background,
+        gradient: c.isDark
+            ? const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0, 0.6],
+                colors: [Color(0xFF070A1C), kBgDark],
+              )
+            : null,
+      ),
       child: Stack(
         children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: WaterLines(
-              color: c.textPrimary.withValues(alpha: c.isDark ? 0.07 : 0.06),
-              height: 240,
+          if (c.isDark) ...[
+            glow(
+              const Alignment(0.56, -1.1),
+              const Color(0xFF1C3D72),
+              0.55,
+              0.8,
             ),
-          ),
+            glow(
+              const Alignment(-1.1, 1.1),
+              const Color(0xFF16194A),
+              0.55,
+              0.75,
+            ),
+            const Positioned.fill(
+              child: RepaintBoundary(
+                child: CustomPaint(painter: _StarsPainter()),
+              ),
+            ),
+          ] else ...[
+            // one faint sky-blue light at the top; the water lines only
+            // just there (stronger, they read as dirty stripes)
+            glow(const Alignment(-0.9, -1.3), kBlue, 0.07, 0.9),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: WaterLines(
+                color: kBlue.withValues(alpha: 0.05),
+                height: 200,
+              ),
+            ),
+          ],
           Positioned.fill(child: child),
         ],
       ),
     );
   }
+}
+
+/// Still stars, the landing page's recipe (landing.js starLayer): mostly
+/// white, a few tinted kBlue / indigo. Same seed every time, so they don't
+/// jump between rebuilds. Fewer and dimmer than the landing's (1 per
+/// 6500 px²): the app's cards are see-through, so stars show inside them.
+class _StarsPainter extends CustomPainter {
+  const _StarsPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rnd = math.Random(14);
+    final n = (size.width * size.height / 6500).clamp(40, 400).round();
+    final paint = Paint();
+    for (var i = 0; i < n; i++) {
+      final at = Offset(
+        rnd.nextDouble() * size.width,
+        rnd.nextDouble() * size.height,
+      );
+      final t = rnd.nextDouble();
+      final rgb = t < 0.12
+          ? const Color(0xFF78B4FF)
+          : t < 0.19
+          ? const Color(0xFFA09EFF)
+          : const Color(0xFFFFFFFF);
+      final big = rnd.nextDouble(); // three sizes, like the landing's 3 layers
+      final r = big < 0.1
+          ? 1.0
+          : big < 0.35
+          ? 0.75
+          : 0.5;
+      paint.color = rgb.withValues(
+        alpha: (0.15 + rnd.nextDouble() * 0.4) * (r == 0.5 ? 0.8 : 1),
+      );
+      canvas.drawCircle(at, r, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StarsPainter old) => false;
 }
 
 /// Thin, still wave lines, like the surface of a river: the app's
@@ -173,7 +266,7 @@ class LocalPhotoView extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 9.5,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -285,10 +378,8 @@ Gradient glassFill(AppColors c) => LinearGradient(
           Colors.white.withValues(alpha: 0.085),
           Colors.white.withValues(alpha: 0.045),
         ]
-      : [
-          Colors.white.withValues(alpha: 0.92),
-          Colors.white.withValues(alpha: 0.78),
-        ],
+      // light: solid white (see-through cards went gray over the page)
+      : [Colors.white, Colors.white],
 );
 
 /// Paints the glass edge the way light hits a real curved glass rim
@@ -437,10 +528,12 @@ class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
   final double radius;
+  final double? opacity; // fill opacity; null = the usual see-through glass
   const GlassCard({
     required this.child,
     this.padding = const EdgeInsets.all(20),
     this.radius = 24,
+    this.opacity,
     super.key,
   });
 
@@ -458,7 +551,9 @@ class GlassCard extends StatelessWidget {
           foregroundPainter: GlassEdgePainter(radius: radius, dark: c.isDark),
           child: Container(
             padding: padding,
-            color: c.surface.withValues(alpha: c.isDark ? 0.62 : 0.72),
+            color: c.surface.withValues(
+              alpha: opacity ?? (c.isDark ? 0.62 : 0.72),
+            ),
             child: child,
           ),
         ),
@@ -480,6 +575,13 @@ const List<double> _saturate18 = [
   -0.1701, 1.2278, -0.0578, 0, 0, //
   -0.1701, -0.5722, 1.7422, 0, 0, //
   0, 0, 0, 1, 0,
+];
+
+/// Light theme cards: a tight contact shadow plus a wide soft one (one
+/// wide shadow alone made the cards look like they float in fog).
+const List<BoxShadow> kLightCardShadow = [
+  BoxShadow(color: Color(0x0A000000), blurRadius: 2, offset: Offset(0, 1)),
+  BoxShadow(color: Color(0x0F000000), blurRadius: 24, offset: Offset(0, 8)),
 ];
 
 /// The standard card: see-through glass with a lit edge.
@@ -516,15 +618,7 @@ class AppCard extends StatelessWidget {
         border: borderColor == null ? null : Border.all(color: borderColor!),
         // Dark theme: the lit edge alone separates cards (shadows don't
         // show on black). Light theme: a soft, wide shadow.
-        boxShadow: c.isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: c.shadow,
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+        boxShadow: c.isDark ? null : kLightCardShadow,
       ),
       // A see-through Material so tap ripples (InkWell, ListTile) show on
       // top of the card color instead of hiding behind it.
@@ -670,7 +764,7 @@ class FadeSlideIn extends StatefulWidget {
 
 class _FadeSlideInState extends State<FadeSlideIn>
     with SingleTickerProviderStateMixin {
-  static const _run = Duration(milliseconds: 520);
+  static const _run = Duration(milliseconds: 600);
   // The delay is built into the animation (it waits during the first part)
   // instead of using a timer, so nothing is left pending in tests.
   //
@@ -692,7 +786,8 @@ class _FadeSlideInState extends State<FadeSlideIn>
     curve: Interval(
       widget.delay.inMilliseconds / (widget.delay + _run).inMilliseconds,
       1,
-      curve: Curves.easeOutCubic,
+      // Apple's ease-out: fast start, long gentle landing.
+      curve: const Cubic(0.16, 1, 0.3, 1),
     ),
   );
 
@@ -709,19 +804,85 @@ class _FadeSlideInState extends State<FadeSlideIn>
     // AnimatedBuilder re-runs `builder` on every animation frame.
     // `child` is passed through separately so the (possibly big) child
     // widget is built once, and only the Opacity/Transform wrapper changes.
-    // v = _curve.value (0 -> 1):
-    //   opacity  = v                -> invisible to fully visible
-    //   offset y = 24 * (1 - v)     -> starts 24 px lower, ends at 0
+    // v = _curve.value (0 -> 1): it fades in, rises 14 px and grows from
+    // 98.5% to full size, so the card arrives instead of just sliding.
+    // Reduced motion (phone setting): it's simply there.
+    if (MediaQuery.disableAnimationsOf(context)) return widget.child;
     return AnimatedBuilder(
       animation: _curve,
       child: widget.child,
-      builder: (context, child) => Opacity(
-        opacity: _curve.value,
-        child: Transform.translate(
-          offset: Offset(0, 24 * (1 - _curve.value)),
-          child: child,
-        ),
+      builder: (context, child) {
+        final v = _curve.value;
+        return Opacity(
+          opacity: v,
+          child: Transform.translate(
+            offset: Offset(0, 14 * (1 - v)),
+            child: Transform.scale(scale: 0.985 + 0.015 * v, child: child),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A number that rolls when it changes, like iOS's numeric text
+/// transition: going up, the new value rises in from below while the old
+/// one leaves through the top (going down, the other way), each fading.
+/// [value] decides the direction; [text] is what's shown.
+class RollingText extends StatefulWidget {
+  final String text;
+  final double value;
+  final TextStyle style;
+  const RollingText(
+    this.text, {
+    required this.value,
+    required this.style,
+    super.key,
+  });
+
+  @override
+  State<RollingText> createState() => _RollingTextState();
+}
+
+class _RollingTextState extends State<RollingText> {
+  bool _up = true;
+
+  @override
+  void didUpdateWidget(RollingText old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) _up = widget.value > old.value;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return Text(widget.text, style: widget.style);
+    }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 420),
+      switchInCurve: const Cubic(0.16, 1, 0.3, 1),
+      switchOutCurve: const Cubic(0.16, 1, 0.3, 1),
+      // Old and new overlap in place, so the width never jumps mid-roll.
+      layoutBuilder: (current, previous) => Stack(
+        alignment: Alignment.centerLeft,
+        children: [...previous, ?current],
       ),
+      transitionBuilder: (child, anim) {
+        final incoming = child.key == ValueKey(widget.text);
+        // A third of the line: enough to read as a roll, not a jump.
+        final dy = (incoming == _up) ? 0.35 : -0.35;
+        return FadeTransition(
+          opacity: anim,
+          child: SlideTransition(
+            position: Tween(
+              begin: Offset(0, dy),
+              end: Offset.zero,
+            ).animate(anim),
+            child: child,
+          ),
+        );
+      },
+      child: Text(widget.text, key: ValueKey(widget.text), style: widget.style),
     );
   }
 }
@@ -766,11 +927,7 @@ class PrimaryButton extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: loading
-              ? SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.4, color: fg),
-                )
+              ? CupertinoActivityIndicator(color: fg)
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -789,6 +946,88 @@ class PrimaryButton extends StatelessWidget {
                     ],
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The second button under a [PrimaryButton] (Cancel, Not now): the same
+/// capsule in a quiet gray fill, like iOS sheets.
+class SecondaryButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  const SecondaryButton({required this.label, this.onPressed, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors(context);
+    return PressableScale(
+      onTap: onPressed,
+      child: Container(
+        width: double.infinity,
+        height: 52,
+        decoration: BoxDecoration(
+          color: c.surfaceAlt,
+          borderRadius: BorderRadius.circular(26),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+            letterSpacing: -0.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small capsule button in the accent tint (Apple's "tinted" style):
+/// Retry, Call, Try again. Sits inside a row or card, not full width.
+class TintedButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final VoidCallback? onPressed;
+  const TintedButton({
+    required this.label,
+    this.icon,
+    this.onPressed,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors(context);
+    return PressableScale(
+      onTap: onPressed,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: c.accent.withValues(alpha: c.isDark ? 0.2 : 0.12),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: c.accent, size: 16),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: c.accent,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -814,9 +1053,9 @@ class StatusPill extends StatelessWidget {
         label.toUpperCase(),
         style: TextStyle(
           color: solid ? Colors.white : color,
-          fontSize: 9.5,
+          fontSize: 11,
           letterSpacing: 0.5,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -842,8 +1081,8 @@ class SampleBadge extends StatelessWidget {
           'SAMPLE',
           style: TextStyle(
             color: c.textSecondary,
-            fontSize: 8.5,
-            letterSpacing: 0.8,
+            fontSize: 11,
+            letterSpacing: 0.6,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -887,9 +1126,9 @@ class SectionHeader extends StatelessWidget {
                     style: TextStyle(
                       fontFamily: kDisplayFont,
                       color: c.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      letterSpacing: -0.3,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 17,
+                      letterSpacing: displayTracking(17),
                     ),
                   ),
                 ),
@@ -906,8 +1145,8 @@ class SectionHeader extends StatelessWidget {
                     actionLabel!,
                     style: TextStyle(
                       color: c.accent,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   Icon(CupertinoIcons.chevron_right, color: c.accent, size: 18),
@@ -959,13 +1198,13 @@ class LiveDot extends StatefulWidget {
 }
 
 class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
-  // Goes 0 -> 1 every 1.6 seconds, forever (..repeat()). This is one of
-  // the never-ending animations that's why tests use pump(), not
-  // pumpAndSettle() (which waits for all animations to finish = never).
+  // Goes 0 -> 1 once (one ripple), then the dot stays still. Not a forever
+  // loop: on the web any running animation redraws the WHOLE screen every
+  // frame, which kept the CPU at 100% with nobody touching the app.
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1600),
-  )..repeat();
+  )..forward();
 
   @override
   void dispose() {
@@ -1115,33 +1354,51 @@ class PageHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? trailing;
-  const PageHeader(this.title, {this.subtitle, this.trailing, super.key});
+  final Widget? badge; // sits right after the title, e.g. SampleBadge
+  const PageHeader(
+    this.title, {
+    this.subtitle,
+    this.trailing,
+    this.badge,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
     final c = AppColors(context);
+    // Apple's Large Title: 34 bold. The trailing button centers on the
+    // title block, so it lines up whether or not there's a subtitle.
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontFamily: kDisplayFont,
-                  color: c.textPrimary,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.8,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: kDisplayFont,
+                        color: c.textPrimary,
+                        fontSize: 34,
+                        height: 1.15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: displayTracking(34),
+                      ),
+                    ),
+                  ),
+                  if (badge != null) ...[const SizedBox(width: 10), badge!],
+                ],
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 2),
                 Text(
                   subtitle!,
-                  style: TextStyle(color: c.textSecondary, fontSize: 13),
+                  style: TextStyle(color: c.textSecondary, fontSize: 15),
                 ),
               ],
             ],
@@ -1210,8 +1467,8 @@ class SubpageScaffold extends StatelessWidget {
                     fontFamily: kDisplayFont,
                     color: c.textPrimary,
                     fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: displayTracking(20),
                   ),
                 ),
               ),
@@ -1440,62 +1697,66 @@ Future<void> showSuccessDialog(
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Material(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(28),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // The green check "pops" in: its scale springs 0 -> 1,
-                  // overshooting a little and bouncing back.
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 650),
-                    curve: kBouncyCurve,
-                    builder: (context, v, child) =>
-                        Transform.scale(scale: v, child: child),
-                    child: Container(
-                      width: 76,
-                      height: 76,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: kSafe,
+          // An alert-sized box; without the cap it spans the whole window.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: Material(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(28),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // The green check "pops" in: its scale springs 0 -> 1,
+                    // overshooting a little and bouncing back.
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 650),
+                      curve: kBouncyCurve,
+                      builder: (context, v, child) =>
+                          Transform.scale(scale: v, child: child),
+                      child: Container(
+                        width: 76,
+                        height: 76,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: kSafe,
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.checkmark_alt,
+                          color: Colors.white,
+                          size: 42,
+                        ),
                       ),
-                      child: const Icon(
-                        CupertinoIcons.checkmark_alt,
-                        color: Colors.white,
-                        size: 42,
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
+                    const SizedBox(height: 8),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 13,
+                        height: 1.45,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 13,
-                      height: 1.45,
+                    const SizedBox(height: 20),
+                    PrimaryButton(
+                      label: 'Done',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  PrimaryButton(
-                    label: 'Done',
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1527,6 +1788,10 @@ class AppTextField extends StatelessWidget {
   final TextEditingController? controller;
   final TextInputType? keyboardType;
   final ValueChanged<String>? onChanged;
+  // Lets password managers fill the field (AutofillHints.email...).
+  final Iterable<String>? autofillHints;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
   const AppTextField({
     required this.hint,
     this.icon,
@@ -1536,6 +1801,9 @@ class AppTextField extends StatelessWidget {
     this.controller,
     this.keyboardType,
     this.onChanged,
+    this.autofillHints,
+    this.textInputAction,
+    this.onSubmitted,
     super.key,
   });
 
@@ -1553,7 +1821,10 @@ class AppTextField extends StatelessWidget {
       maxLines: maxLines,
       keyboardType: keyboardType,
       onChanged: onChanged,
-      style: TextStyle(color: c.textPrimary, fontSize: 14),
+      autofillHints: autofillHints,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      style: TextStyle(color: c.textPrimary, fontSize: 15),
       cursorColor: c.accent,
       decoration: InputDecoration(
         filled: true,
@@ -1563,7 +1834,7 @@ class AppTextField extends StatelessWidget {
             : Icon(icon, color: c.textSecondary, size: 20),
         suffixIcon: suffix,
         hintText: hint,
-        hintStyle: TextStyle(color: c.textSecondary, fontSize: 13.5),
+        hintStyle: TextStyle(color: c.textSecondary, fontSize: 15),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
@@ -1595,11 +1866,15 @@ class SelectChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColors(context);
-    // Picked = solid white (black in light mode), like an iOS segmented
-    // control. A chip with its own [color] (a risk level) keeps that color.
-    final tint = color ?? c.inverse;
+    // Picked = the raised glass thumb of the segmented control (white at
+    // 16% on dark, white with a soft shadow on light), never a glaring
+    // solid white. A chip with its own [color] (a risk level) gets a soft
+    // tint of that color instead.
+    final picked = color != null
+        ? color!.withValues(alpha: c.isDark ? 0.22 : 0.14)
+        : (c.isDark ? Colors.white.withValues(alpha: 0.16) : Colors.white);
     final fg = selected
-        ? (color == null ? c.onInverse : Colors.white)
+        ? (color == null ? c.textPrimary : c.readable(color!))
         : c.textSecondary;
     return PressableScale(
       onTap: onTap,
@@ -1608,9 +1883,24 @@ class SelectChip extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? tint : c.surfaceAlt,
+          color: selected ? picked : c.surfaceAlt,
           borderRadius: BorderRadius.circular(40),
-          border: Border.all(color: selected ? tint : c.border),
+          border: Border.all(
+            color: selected
+                ? (c.isDark
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.black.withValues(alpha: 0.06))
+                : c.border,
+          ),
+          boxShadow: selected && !c.isDark
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1627,7 +1917,7 @@ class SelectChip extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: fg,
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
               ),
@@ -1655,7 +1945,7 @@ class FieldLabel extends StatelessWidget {
           color: c.textSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w800,
-          letterSpacing: 1,
+          letterSpacing: 0.6,
         ),
       ),
     );
@@ -1685,17 +1975,16 @@ class _SwipeDownToCloseState extends State<_SwipeDownToClose>
 
   double _offset = 0;
   bool _closing = false;
-  // Slides the sheet back up to 0 when it was let go too early.
-  late final AnimationController _back = AnimationController(
+  // Springs the sheet back up to 0 when it was let go too early, starting
+  // at the finger's speed (no seam between the drag and the motion).
+  late final AnimationController _back = AnimationController.unbounded(
     vsync: this,
-    duration: const Duration(milliseconds: 200),
   );
-  late Animation<double> _backTween;
 
   @override
   void initState() {
     super.initState();
-    _back.addListener(() => setState(() => _offset = _backTween.value));
+    _back.addListener(() => setState(() => _offset = _back.value));
   }
 
   @override
@@ -1727,11 +2016,15 @@ class _SwipeDownToCloseState extends State<_SwipeDownToClose>
         _closing = true;
         Navigator.of(context).pop();
       } else {
-        _backTween = Tween(
-          begin: _offset,
-          end: 0.0,
-        ).animate(CurvedAnimation(parent: _back, curve: Curves.easeOut));
-        _back.forward(from: 0);
+        // Drawer / sheet spring (Apple: damping 0.8, response 0.3).
+        _back.animateWith(
+          SpringSimulation(
+            const SpringDescription(mass: 1, stiffness: 439, damping: 33.5),
+            _offset,
+            0,
+            -speed,
+          ),
+        );
       }
     }
     return false;
@@ -1739,19 +2032,26 @@ class _SwipeDownToCloseState extends State<_SwipeDownToClose>
 
   @override
   Widget build(BuildContext context) {
-    return NotificationListener<ScrollNotification>(
-      onNotification: _onScroll,
-      child: Transform.translate(
-        offset: Offset(0, _offset),
-        child: widget.child,
+    // The app scrolls with iOS bounce; a sheet keeps the clamping kind,
+    // because pulling it down to close reads the overscroll.
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context)
+          .copyWith(physics: const ClampingScrollPhysics()),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: Transform.translate(
+          offset: Offset(0, _offset.clamp(0, 1e9)),
+          child: widget.child,
+        ),
       ),
     );
   }
 }
 
-/// Barangay picker used by the rescue, missing person and report forms.
+/// Barangay picker used by the rescue, missing person and report forms,
+/// and sign-up. [value] null = nothing picked yet (shows "Choose...").
 class BarangayDropdown extends StatelessWidget {
-  final String value;
+  final String? value;
   final ValueChanged<String> onChanged;
   const BarangayDropdown({
     required this.value,
@@ -1772,6 +2072,10 @@ class BarangayDropdown extends StatelessWidget {
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
+          hint: Text(
+            'Choose your barangay',
+            style: TextStyle(color: c.textSecondary, fontSize: 15),
+          ),
           dropdownColor: c.surface,
           borderRadius: BorderRadius.circular(16),
           menuMaxHeight: 320,
@@ -1779,7 +2083,7 @@ class BarangayDropdown extends StatelessWidget {
           style: TextStyle(
             color: c.textPrimary,
             fontFamily: kFontFamily,
-            fontSize: 14,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
           items: [
