@@ -82,7 +82,7 @@ class _AgosMapState extends State<AgosMap> implements MapBackend {
   }
 
   @override
-  void flyTo(LatLng p, double zoom) => _move(p, zoom);
+  void flyTo(LatLng p, double zoom, {String? place}) => _move(p, zoom);
   @override
   void zoomBy(double by) => _move(_map.camera.center, _map.camera.zoom + by);
   @override

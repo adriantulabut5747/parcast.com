@@ -185,9 +185,11 @@
       // Same recipe as the landing page's stars (landing.js starLayer), one still layer.
       (function () {
         var w = Math.max(screen.width, innerWidth), h = Math.max(screen.height, innerHeight), out = [];
-        for (var i = 0; i < 300; i++) {
+        // Phones: a third as many and dimmer (Adrian, Nov 14 2026), like the app's PageBackground.
+        var phone = innerWidth < 600, n = phone ? 100 : 300, a = phone ? 0.12 : 0.25, span = phone ? 0.3 : 0.6;
+        for (var i = 0; i < n; i++) {
           var c = Math.random() < 0.12 ? '120,180,255' : Math.random() < 0.08 ? '160,158,255' : '255,255,255';
-          out.push(Math.round(Math.random() * w) + 'px ' + Math.round(Math.random() * h) + 'px rgba(' + c + ',' + (0.25 + Math.random() * 0.6).toFixed(2) + ')');
+          out.push(Math.round(Math.random() * w) + 'px ' + Math.round(Math.random() * h) + 'px rgba(' + c + ',' + (a + Math.random() * span).toFixed(2) + ')');
         }
         document.querySelector('#loader .stars').style.boxShadow = out.join(',');
       })();

@@ -47,6 +47,9 @@
 
   <div class="page">
     <!-- ======================= HERO ======================= -->
+    <!-- .top only matters on phones: it lets the barangay marquee sit
+         between the buttons and Tugak (landing.css, max-width 560px). -->
+    <div class="top">
     <header class="hero" id="top">
       <nav class="topbar" aria-label="Main">
         <a class="brand" href="./" aria-label="AgosAlert home">
@@ -59,7 +62,7 @@
           <a href="#barangays">Coverage</a>
           <a href="#faq">FAQ</a>
         </div>
-        <button class="btn btn-white btn-sm" type="button" data-open-app>Open the app</button>
+        <button class="btn btn-blue btn-sm" type="button" data-open-app>Open the app</button>
       </nav>
 
       <div class="hero-grid">
@@ -68,12 +71,12 @@
           <p class="greeting" id="greeting"><span class="kap">Mayap a salubung!</span> Welcome, Mabalacat.</p>
           <!-- Three lines on every screen (Adrian, Nov 14 2026). -->
           <h1 id="headline"><span>Know the flood</span> <span>before your</span> <span>street does.</span></h1>
-          <p class="lede">Live rain forecasts, flood photos from your neighbors, and SOS one hold away. Made for all 27 barangays of Mabalacat. Tugak will show you around.</p>
+          <p class="lede">Rain forecasts, neighbors' flood photos, and SOS for Mabalacat.</p>
           <div class="hero-cta">
-            <button class="btn btn-white btn-lg" type="button" data-open-app>
+            <button class="btn btn-blue btn-lg" type="button" data-open-app>
               <span class="ms" aria-hidden="true" data-i="arrow_right"></span>Open the app
             </button>
-            <button class="btn btn-blue btn-lg" type="button" data-guest>
+            <button class="btn btn-white btn-lg" type="button" data-guest>
               <span class="ms" aria-hidden="true" data-i="eye_fill"></span>Try it as a guest
             </button>
           </div>
@@ -161,6 +164,7 @@
       <div class="mq mq-b" aria-hidden="true"><div class="mq-track" id="mqB"></div></div>
       <p class="sr-only" id="barangayList"></p>
     </section>
+    </div>
 
     <main>
       <!-- ======================= THE APP, FOUR SCREENS ======================= -->
@@ -414,10 +418,10 @@
         <p class="say say-end" data-side="center"><b>Tugak</b><span class="say-text">That’s the tour. Stay dry out there.</span></p>
         <h2 id="end-title">Check the sky before it checks you.</h2>
         <div class="hero-cta">
-          <button class="btn btn-white btn-lg" type="button" data-open-app>
+          <button class="btn btn-blue btn-lg" type="button" data-open-app>
             <span class="ms" aria-hidden="true" data-i="arrow_right"></span>Open the app
           </button>
-          <button class="btn btn-blue btn-lg" type="button" data-guest>
+          <button class="btn btn-white btn-lg" type="button" data-guest>
             <span class="ms" aria-hidden="true" data-i="eye_fill"></span>Try it as a guest
           </button>
         </div>

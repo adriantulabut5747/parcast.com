@@ -49,7 +49,8 @@ class MapZone {
 
 /// What both map versions must be able to do when asked by the controller.
 abstract class MapBackend {
-  void flyTo(LatLng p, double zoom);
+  /// [place]: a barangay name; the web map lands on its label if it has it.
+  void flyTo(LatLng p, double zoom, {String? place});
   void zoomBy(double by);
   void reset(LatLng p, double zoom);
   void set3d(bool on);
@@ -76,7 +77,8 @@ class AgosMapController {
     if (_backend == b) _backend = null;
   }
 
-  void flyTo(LatLng p, {double zoom = 15.5}) => _backend?.flyTo(p, zoom);
+  void flyTo(LatLng p, {double zoom = 15.5, String? place}) =>
+      _backend?.flyTo(p, zoom, place: place);
   void zoomBy(double by) => _backend?.zoomBy(by);
   void reset(LatLng p, double zoom) => _backend?.reset(p, zoom);
   void set3d(bool on) => _backend?.set3d(on);

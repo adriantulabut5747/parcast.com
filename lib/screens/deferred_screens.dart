@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../services/auth.dart';
-import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/skeleton.dart';
 import 'account.dart';
@@ -53,9 +52,9 @@ void openReportIncident(BuildContext context) {
 /// Nov 14 2026, replaced the Reports composer). Opens the report form.
 /// Wider screens get a "Report flooding" button instead.
 class ReportFab extends StatelessWidget {
-  // 56 over the feed; 48 on the Map, beside its slim sheet handle
+  // Small and a deep blue so it doesn't shout over the feed (Adrian, Nov 14 2026).
   final double size;
-  const ReportFab({this.size = 56, super.key});
+  const ReportFab({this.size = 46, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -71,13 +70,15 @@ class ReportFab extends StatelessWidget {
             width: size,
             height: size,
             decoration: BoxDecoration(
-              color: kBlue,
+              color: const Color(
+                0xFF0B4A9C,
+              ), // kBlue darkened, same as the landing's marquee band
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0A3D80).withValues(alpha: 0.45),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
@@ -86,7 +87,7 @@ class ReportFab extends StatelessWidget {
               child: Icon(
                 CupertinoIcons.add,
                 color: Colors.white,
-                size: size / 2,
+                size: size * 0.46,
               ),
             ),
           ),

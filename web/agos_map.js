@@ -197,6 +197,16 @@
       apply3d(map.getPitch());
     }
 
+    // Where the map draws a place's name ("San Francisco" -> its OSM place
+    // point), from the tiles already loaded; null if it isn't loaded.
+    function placeLabel(name) {
+      const want = name.toLowerCase();
+      const f = map
+        .querySourceFeatures('base', { sourceLayer: 'places' })
+        .find((f) => f.geometry.type === 'Point' && String(f.properties.name || '').toLowerCase().replace(/^(barangay|brgy\.?)\s+/, '') === want);
+      return f ? f.geometry.coordinates : null;
+    }
+
     function zonesGeo() {
       return {
         type: 'FeatureCollection',
@@ -395,8 +405,11 @@
         zonesVisible();
       },
       select,
-      flyTo(lng, lat, zoom) {
-        map.flyTo({ center: [lng, lat], zoom: Math.max(zoom, map.getZoom()), duration: 1100, essential: true });
+      flyTo(lng, lat, zoom, place) {
+        // A barangay search lands on the name the map prints (its OSM place
+        // point), not our own center, which can sit a few blocks away.
+        const at = (place && placeLabel(place)) || [lng, lat];
+        map.flyTo({ center: at, zoom: Math.max(zoom, map.getZoom()), duration: 1100, essential: true });
       },
       jumpTo(lng, lat, zoom) {
         map.jumpTo({ center: [lng, lat], zoom });

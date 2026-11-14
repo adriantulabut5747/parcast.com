@@ -154,7 +154,7 @@ class _MapTabState extends State<MapTab> {
   // The barangay search: fly to that barangay's center.
   void _goToBarangay(String b) {
     setState(() => _selected = null);
-    _map.flyTo(kBarangayPoints[b] ?? kMabalacatCenter, zoom: 15);
+    _map.flyTo(kBarangayPoints[b] ?? kMabalacatCenter, zoom: 15, place: b);
   }
 
   void _recenter() {
@@ -201,6 +201,9 @@ class _MapTabState extends State<MapTab> {
   double? _dragHeight;
   bool _legendOpen = false;
   bool _layersOpen = false; // phones: the Layers panel under the top row
+  // Phones: typing in the search hides the sheet and the +, which the
+  // keyboard would otherwise push up over the results.
+  bool _searching = false;
 
   double _sheetMax(BoxConstraints box) => math.min(box.maxHeight * 0.5, 440.0);
 
@@ -211,6 +214,9 @@ class _MapTabState extends State<MapTab> {
     // Phones: the sheet sits above the floating bottom nav. Tablets have
     // none, and their sheet doesn't stretch across the whole screen.
     final bottom = wide ? 16.0 : 78.0;
+    // Phones: the sheet and the + line up with the bottom nav's sides.
+    final side = wide ? 12.0 : 28.0;
+    final hideBottom = !wide && _searching;
     return LayoutBuilder(
       builder: (context, box) {
         final max = _sheetMax(box);
@@ -253,31 +259,44 @@ class _MapTabState extends State<MapTab> {
                   ? const Duration(milliseconds: 420)
                   : Duration.zero,
               curve: kSnappyCurve,
-              left: 12,
+              left: side,
               // Phones: closed, it leaves room for the + on its right.
               right: wide
                   ? null
                   : _sheetOpen
-                  ? 12
-                  : 12 + _fab + 8,
+                  ? side
+                  : side + _fab + 8,
               width: wide ? 420 : null,
               bottom: bottom,
               height: height,
-              child: _sheet(c, max: max, height: height),
+              child: IgnorePointer(
+                ignoring: hideBottom,
+                child: AnimatedOpacity(
+                  opacity: hideBottom ? 0 : 1,
+                  duration: const Duration(milliseconds: 180),
+                  child: Visibility(
+                    visible: !hideBottom,
+                    maintainState: true,
+                    maintainAnimation: true,
+                    maintainSize: true,
+                    child: _sheet(c, max: max, height: height),
+                  ),
+                ),
+              ),
             ),
             // Phones: the + beside the closed sheet (hidden while it's open).
             if (!wide)
               Positioned(
-                right: 12,
+                right: side,
                 bottom: bottom + (_peek - _fab) / 2,
                 child: IgnorePointer(
-                  ignoring: _sheetOpen,
+                  ignoring: _sheetOpen || hideBottom,
                   child: AnimatedScale(
-                    scale: _sheetOpen ? 0.6 : 1,
+                    scale: _sheetOpen || hideBottom ? 0.6 : 1,
                     duration: const Duration(milliseconds: 300),
                     curve: kSnappyCurve,
                     child: AnimatedOpacity(
-                      opacity: _sheetOpen ? 0 : 1,
+                      opacity: _sheetOpen || hideBottom ? 0 : 1,
                       duration: const Duration(milliseconds: 200),
                       child: const MapGlass(
                         radius: _fab / 2,
@@ -318,7 +337,12 @@ class _MapTabState extends State<MapTab> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: BarangaySearch(onPick: _goToBarangay)),
+            Expanded(
+              child: BarangaySearch(
+                onPick: _goToBarangay,
+                onFocus: (f) => setState(() => _searching = f),
+              ),
+            ),
             const SizedBox(width: 6),
             Semantics(
               toggled: _layersOpen,

@@ -26,7 +26,15 @@ List<String> barangayMatches(String q) {
 class BarangaySearch extends StatefulWidget {
   final ValueChanged<String> onPick;
   final bool overMap;
-  const BarangaySearch({required this.onPick, this.overMap = true, super.key});
+
+  /// Called when the field gains (true) or loses (false) the keyboard.
+  final ValueChanged<bool>? onFocus;
+  const BarangaySearch({
+    required this.onPick,
+    this.overMap = true,
+    this.onFocus,
+    super.key,
+  });
 
   @override
   State<BarangaySearch> createState() => _BarangaySearchState();
@@ -39,7 +47,10 @@ class _BarangaySearchState extends State<BarangaySearch> {
   @override
   void initState() {
     super.initState();
-    _focus.addListener(() => setState(() {}));
+    _focus.addListener(() {
+      setState(() {});
+      widget.onFocus?.call(_focus.hasFocus);
+    });
   }
 
   @override
@@ -78,40 +89,47 @@ class _BarangaySearchState extends State<BarangaySearch> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _box(
-          c,
-          TextField(
-            controller: _text,
-            focusNode: _focus,
-            onChanged: (_) => setState(() {}),
-            onSubmitted: (_) {
-              if (found.isNotEmpty) _pick(found.first);
-            },
-            textInputAction: TextInputAction.search,
-            style: TextStyle(color: c.textPrimary, fontSize: 15),
-            cursorColor: c.accent,
-            decoration: InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              prefixIcon: Icon(
-                CupertinoIcons.search,
-                color: c.textSecondary,
-                size: 18,
-              ),
-              suffixIcon: _text.text.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Clear',
-                      icon: Icon(
-                        CupertinoIcons.xmark_circle_fill,
-                        color: c.textSecondary,
-                        size: 18,
+        // 44 tall, a capsule: the same height and shape as the Map's round
+        // buttons beside it (Adrian, Nov 14 2026).
+        SizedBox(
+          height: 44,
+          child: _box(
+            c,
+            radius: 22,
+            TextField(
+              controller: _text,
+              focusNode: _focus,
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) {
+                if (found.isNotEmpty) _pick(found.first);
+              },
+              textInputAction: TextInputAction.search,
+              textAlignVertical: TextAlignVertical.center,
+              style: TextStyle(color: c.textPrimary, fontSize: 15),
+              cursorColor: c.accent,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                prefixIcon: Icon(
+                  CupertinoIcons.search,
+                  color: c.textSecondary,
+                  size: 18,
+                ),
+                suffixIcon: _text.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear',
+                        icon: Icon(
+                          CupertinoIcons.xmark_circle_fill,
+                          color: c.textSecondary,
+                          size: 18,
+                        ),
+                        onPressed: () => setState(_text.clear),
                       ),
-                      onPressed: () => setState(_text.clear),
-                    ),
-              hintText: 'Search a barangay',
-              hintStyle: TextStyle(color: c.textSecondary, fontSize: 15),
-              contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                hintText: 'Search a barangay',
+                hintStyle: TextStyle(color: c.textSecondary, fontSize: 15),
+                contentPadding: EdgeInsets.zero,
+              ),
             ),
           ),
         ),

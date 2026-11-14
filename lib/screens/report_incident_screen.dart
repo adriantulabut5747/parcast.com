@@ -822,6 +822,7 @@ class _SpotPickerState extends State<_SpotPicker> {
                     onPick: (b) => _map.flyTo(
                       kBarangayPoints[b] ?? kMabalacatCenter,
                       zoom: 16,
+                      place: b,
                     ),
                   ),
                 ),

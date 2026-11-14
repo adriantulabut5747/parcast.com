@@ -571,3 +571,17 @@ screenshot — use a branch for risky changes.
   Landing copy rewritten (hero "Know the flood / before your / street
   does."; each line <= the old longest, they can't wrap). Body copy 17-20
   px in a brighter gray. Photo credit = John Dexter Pimentel.
+- Later the same day: Weather phone card is 340 tall: temp header across
+  the top, the 3 stats STACKED on the left (`_stacked`), Tugak on the right
+  (`StageReserve(top: 92, left: 140, bottom: 78, zoom: 1.15)`; 1.3 cut his
+  feet), bubble tail follows him (`--tail` in scene.js). Login: no Tugak
+  bubble at rest, only for errors; "Continue as guest" = underlined link.
+  ReportFab 46 px, deep blue `#0B4A9C`. Map (phones): sheet + + at the
+  nav's 28 px sides, hidden while the search has focus
+  (`BarangaySearch.onFocus`); search field 44 tall capsule = the buttons;
+  a barangay search lands on the map's own label (`placeLabel` in
+  agos_map.js, falls back to kBarangayPoints). Landing phones: copy +
+  buttons, then the barangay marquee, then store badges + notice, then
+  Tugak (`.top` wrapper, display: contents); Open the app = blue
+  (`#0071e3`, white on kBlue fails contrast), guest = light gray
+  `.btn-white` (#d8d9de); loading screen stars: phones 100, dimmer.

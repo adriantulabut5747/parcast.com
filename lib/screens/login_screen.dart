@@ -205,16 +205,31 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 14),
           _modeSwitch(c),
-          const SizedBox(height: 24),
-          SecondaryButton(
-            label: 'Just looking? Continue as guest',
-            onPressed: _busy ? null : _continueAsGuest,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Weather, map, reports, hotlines and SOS. No account needed.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: c.textSecondary, fontSize: 13),
+          const SizedBox(height: 6),
+          // A quiet underlined link, not a button (Adrian, Nov 14 2026):
+          // logging in is the main way in, guest is the side door.
+          Center(
+            child: Semantics(
+              button: true,
+              child: PressableScale(
+                onTap: _busy ? null : _continueAsGuest,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 10,
+                    horizontal: 8,
+                  ),
+                  child: Text(
+                    'Continue as guest',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 15,
+                      decoration: TextDecoration.underline,
+                      decorationColor: c.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -257,17 +272,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Tugak's welcome: his bubble, then him tipping his hat in the landing
-  // hero's kBlue pool. When something's wrong he says it instead (the
-  // form has no red error line) and thinks it over.
+  // Tugak tipping his hat in the landing hero's kBlue pool. No bubble at
+  // rest (Adrian, Nov 14 2026); when something's wrong he says it in one
+  // (the form has no red error line) and thinks it over.
   Widget _hello(bool wide) {
     final size = wide ? 300.0 : 130.0;
     final error = _error;
-    final line =
-        error ??
-        (_signUp
-            ? "One free account and you can post floods and vote on reports. That's the whole deal."
-            : "Log in so your flood reports carry your name. Or look around as a guest, I don't check IDs.");
     const fade = Duration(milliseconds: 220);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -283,12 +293,17 @@ class _LoginScreenState extends State<LoginScreen> {
               curve: Curves.easeOutCubic,
               child: AnimatedSwitcher(
                 duration: fade,
-                child: TugakSay(line, key: ValueKey(line)),
+                child: error == null
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        key: ValueKey(error),
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: TugakSay(error),
+                      ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 4),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: RadialGradient(

@@ -71,7 +71,6 @@ class _WeatherTabState extends State<WeatherTab> {
     final size = screenSizeOf(context);
     final wide = size == ScreenSize.desktop;
     final phone = size == ScreenSize.phone;
-    final screen = MediaQuery.sizeOf(context);
     const gap = 16.0;
     // Pull down past the top: Apple's spinner appears above the content
     // (needs the iOS bounce, see main.dart).
@@ -102,18 +101,17 @@ class _WeatherTabState extends State<WeatherTab> {
                     delay: Duration(milliseconds: delayMs),
                     child: child,
                   );
-                  // Tugak's stage = the "now" card. Phones: compact readings
-                  // on top, Tugak (camera closer), his bubble at the bottom
-                  // (Nov 14 2026, Adrian: the card was too tall, Tugak too
-                  // small). Desktop: as tall as the column beside it.
+                  // Tugak's stage = the "now" card. Phones: the temperature
+                  // on top, the three stats stacked on the left with Tugak
+                  // beside them, his bubble at the bottom (Nov 14 2026,
+                  // Adrian: a shorter card, no blank half). Desktop: as tall
+                  // as the column beside it.
                   final terrace = _Terrace(weather: w, hour: _hour);
                   final stage = part(
                     wide
                         ? terrace
                         : SizedBox(
-                            height: phone
-                                ? (screen.width * 1.18).clamp(430.0, 480.0)
-                                : 460.0,
+                            height: phone ? 340.0 : 460.0,
                             child: terrace,
                           ),
                     0,
@@ -274,10 +272,11 @@ class _TerraceState extends State<_Terrace> {
             final below = box.maxWidth < 560;
             final reserve = below
                 ? const StageReserve(
-                    top: 128,
-                    bottom: 92,
+                    top: 92,
+                    left: 140,
+                    bottom: 78,
                     below: true,
-                    zoom: 1.3,
+                    zoom: 1.15,
                   )
                 : StageReserve(left: (box.maxWidth * 0.5).clamp(300.0, 420.0));
             return CustomPaint(
@@ -458,7 +457,8 @@ class _Greeting extends StatelessWidget {
 /// ------------------------------------------------------------
 class _NowReadout extends StatelessWidget {
   final MabalacatWeather weather;
-  // phones: a smaller numeral and the three stats on one line
+  // phones: a smaller numeral and the three stats stacked on the left
+  // (Tugak stands to their right)
   final bool compact;
   const _NowReadout({required this.weather, this.compact = false});
 
@@ -557,16 +557,21 @@ class _NowReadout extends StatelessWidget {
         ),
         SizedBox(height: compact ? 10 : 12),
         if (compact)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 8,
             children: [
-              _inline(CupertinoIcons.umbrella_fill, '${h.rainChance}%', 'rain'),
-              _inline(
+              _stacked(
+                CupertinoIcons.umbrella_fill,
+                '${h.rainChance}%',
+                'Rain chance',
+              ),
+              _stacked(
                 CupertinoIcons.drop_fill,
                 '${h.rain.toStringAsFixed(1)} mm',
-                'this hour',
+                'Rain this hour',
               ),
-              _inline(CupertinoIcons.cloud, '${w.cloud}%', 'cloud'),
+              _stacked(CupertinoIcons.cloud, '${w.cloud}%', 'Cloud cover'),
             ],
           )
         else
@@ -598,31 +603,43 @@ class _NowReadout extends StatelessWidget {
     );
   }
 
-  // shrinks to fit rather than overflow on the narrowest phones
-  Widget _inline(IconData icon, String value, String label) => Flexible(
-    child: FittedBox(
-      fit: BoxFit.scaleDown,
-      child: _inlineRow(icon, value, label),
-    ),
-  );
-
-  Widget _inlineRow(IconData icon, String value, String label) => Row(
+  // Phones: one stat per line, an icon in a small sunken squircle, the
+  // value over its name (like the Weather app's small widgets).
+  Widget _stacked(IconData icon, String value, String label) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, color: kTextSecondaryDark, size: 13),
-      const SizedBox(width: 4),
-      Text(
-        value,
-        style: const TextStyle(
-          color: kTextPrimaryDark,
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
+      Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: kTextPrimaryDark.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: const Color(0x1AFFFFFF)),
         ),
+        child: Icon(icon, color: kTextSecondaryDark, size: 14),
       ),
-      const SizedBox(width: 3),
-      Text(
-        label,
-        style: const TextStyle(color: kTextSecondaryDark, fontSize: 12),
+      const SizedBox(width: 10),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              color: kTextPrimaryDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              height: 1.15,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(
+              color: kTextSecondaryDark,
+              fontSize: 11,
+              height: 1.2,
+            ),
+          ),
+        ],
       ),
     ],
   );

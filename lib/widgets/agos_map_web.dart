@@ -216,14 +216,14 @@ class _AgosMapState extends State<AgosMap> implements MapBackend {
 
   // ---- MapBackend (called through AgosMapController)
   @override
-  void flyTo(LatLng p, double zoom) {
+  void flyTo(LatLng p, double zoom, {String? place}) {
     final m = _map;
     if (m == null) {
       _pendingCenter = p;
       _pendingZoom = zoom;
       return;
     }
-    m.flyTo(p.longitude, p.latitude, zoom);
+    m.flyTo(p.longitude, p.latitude, zoom, place?.toJS);
   }
 
   @override
@@ -338,7 +338,7 @@ extension type _MapHandle(JSObject _) implements JSObject {
   external void setZones(String json);
   external void setHidden(String kind, bool off);
   external void select(JSString? id);
-  external void flyTo(double lng, double lat, double zoom);
+  external void flyTo(double lng, double lat, double zoom, JSString? place);
   external void zoomBy(double by);
   external void reset(double lng, double lat, double zoom);
   external void set3d(bool on);

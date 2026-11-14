@@ -82,7 +82,7 @@ const CSS = `
 .tg-side .tg-bubble i{left:auto;right:-8px;top:50%;bottom:auto;margin-top:-7px;border-left:none;border-bottom:none;
   border-top:inherit;border-right:inherit;border-radius:0 4px 0 0;clip-path:polygon(0 0,100% 0,100% 100%)}
 .tg-below .tg-bubble{max-width:none;font-size:13px;padding:9px 13px 11px}
-.tg-below .tg-bubble i{left:50%;top:-8px;bottom:auto;margin-left:-7px;border-left:inherit;border-bottom:none;
+.tg-below .tg-bubble i{left:var(--tail,50%);top:-8px;bottom:auto;margin-left:-7px;border-left:inherit;border-bottom:none;
   border-top:inherit;border-radius:4px 0 0 0;clip-path:polygon(0 0,100% 0,0 100%)}
 `;
 
@@ -473,6 +473,8 @@ function create(container, optsJson, cb) {
       s.top = 'auto';
       s.left = s.right = '12px';
       s.bottom = '12px';
+      // tail under Tugak: the middle of the part he's framed in
+      s.setProperty('--tail', Math.round(reserve.left + (W - reserve.left) / 2 - 12) + 'px');
       return;
     }
     if (narrow) {
