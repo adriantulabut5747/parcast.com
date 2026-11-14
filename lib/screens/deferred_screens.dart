@@ -53,9 +53,9 @@ void openReportIncident(BuildContext context) {
 /// Nov 14 2026, replaced the Reports composer). Opens the report form.
 /// Wider screens get a "Report flooding" button instead.
 class ReportFab extends StatelessWidget {
-  const ReportFab({super.key});
-
-  static const double size = 56;
+  // 56 over the feed; 48 on the Map, beside its slim sheet handle
+  final double size;
+  const ReportFab({this.size = 56, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -82,14 +82,11 @@ class ReportFab extends StatelessWidget {
               ],
             ),
             child: CustomPaint(
-              foregroundPainter: const GlassEdgePainter(
-                radius: size / 2,
-                dark: true,
-              ),
-              child: const Icon(
+              foregroundPainter: GlassEdgePainter(radius: size / 2, dark: true),
+              child: Icon(
                 CupertinoIcons.add,
                 color: Colors.white,
-                size: 28,
+                size: size / 2,
               ),
             ),
           ),

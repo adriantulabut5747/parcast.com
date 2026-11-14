@@ -158,7 +158,7 @@ void main() {
     ); // his bubble grows and scrolls into view
 
     final toSignUp = find.textContaining(
-      'Create an account',
+      'Create a free account',
       findRichText: true,
     );
     await tester.ensureVisible(toSignUp);
@@ -166,7 +166,7 @@ void main() {
     await tester.tap(toSignUp);
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Choose your barangay'), findsOneWidget);
-    await tester.tap(find.text('Create account').last);
+    await tester.tap(find.text('Create my account').last);
     await tester.pump();
     expect(find.textContaining('I need your full name first.'), findsOneWidget);
   });
@@ -567,7 +567,7 @@ void main() {
     tester,
   ) async {
     await pumpPhone(tester, const Scaffold(body: MapTab()));
-    await tester.tap(find.textContaining('shelters open'));
+    await tester.tap(find.textContaining('reports · '));
     await tester.pump(); // starts the sheet's slide up
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Brgy. Dau'), findsOneWidget);
@@ -683,7 +683,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(showing('Request rescue'), isFalse);
-    expect(showing('Tap the + down there to start.'), isTrue);
+    expect(
+      showing(
+        "See water on a street? Post one photo and pin the spot. That's all I need.",
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('HomeShell can open on another tab', (tester) async {

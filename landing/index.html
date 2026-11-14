@@ -67,14 +67,14 @@
           <!-- Filled in by landing.js from the time in Mabalacat. -->
           <p class="greeting" id="greeting"><span class="kap">Mayap a salubung!</span> Welcome, Mabalacat.</p>
           <!-- Three lines on every screen (Adrian, Nov 14 2026). -->
-          <h1 id="headline"><span>Flood alerts for</span> <span>every barangay</span> <span>in Mabalacat.</span></h1>
-          <p class="lede">Live rain forecasts, flood reports from your neighbors, and help one tap away. Tugak, our toad in the fedora, will walk you through it.</p>
+          <h1 id="headline"><span>Know the flood</span> <span>before your</span> <span>street does.</span></h1>
+          <p class="lede">Live rain forecasts, flood photos from your neighbors, and SOS one hold away. Made for all 27 barangays of Mabalacat. Tugak will show you around.</p>
           <div class="hero-cta">
             <button class="btn btn-white btn-lg" type="button" data-open-app>
-              <span class="ms" aria-hidden="true" data-i="arrow_right"></span>Open AgosAlert
+              <span class="ms" aria-hidden="true" data-i="arrow_right"></span>Open the app
             </button>
             <button class="btn btn-blue btn-lg" type="button" data-guest>
-              <span class="ms" aria-hidden="true" data-i="eye_fill"></span>Look around as a guest
+              <span class="ms" aria-hidden="true" data-i="eye_fill"></span>Try it as a guest
             </button>
           </div>
         </section>
@@ -168,7 +168,7 @@
         <div class="sec-head center">
           <p class="eyebrow">The app</p>
           <h2 id="tour-title">Four tabs. That’s the whole app.</h2>
-          <p class="sec-lede">No menus to dig through. Weather, the map, neighbors’ reports, and help, each one tap from the bottom bar.</p>
+          <p class="sec-lede">No menus, no maze. Everything you need in a flood sits one tap from the bottom bar.</p>
         </div>
         <ul class="parade" id="parade" role="list">
           <li class="pop">
@@ -199,12 +199,12 @@
       <section class="row" id="weather" aria-labelledby="weather-title">
         <div class="row-copy">
           <p class="sec-num"><span>01</span> Weather</p>
-          <h2 id="weather-title">Know it’s coming before it rains.</h2>
-          <p class="sec-lede">Every 15 minutes, AgosAlert asks Open-Meteo for Mabalacat’s forecast: the chance of rain, the millimeters expected, and the weather code that tells a shower from a thunderstorm. Today’s numbers, live:</p>
+          <h2 id="weather-title">Rain won’t catch you off guard.</h2>
+          <p class="sec-lede">Every 15 minutes we pull Mabalacat’s forecast from Open-Meteo and turn it into a flood outlook you can read in a second. Here’s today, live:</p>
           <div class="panel readings" aria-live="polite">
             <div class="reading"><span>Rain chance</span><b id="hwChance">--</b></div>
             <div class="reading"><span>Rain expected</span><b id="hwSum">--</b></div>
-            <div class="reading"><span>Weather code</span><b id="hwCode">--</b></div>
+            <div class="reading"><span id="hwCodeLabel">Weather code</span><b id="hwCode">--</b></div>
             <p class="reading-foot"><span class="live-dot"></span><span id="hwTime">Checking the forecast…</span></p>
           </div>
           <div class="panel rules">
@@ -225,8 +225,8 @@
       <section class="row flip" id="reports" aria-labelledby="reports-title">
         <div class="row-copy">
           <p class="sec-num"><span>02</span> Flood reports</p>
-          <h2 id="reports-title">Your neighbors report the water.</h2>
-          <p class="sec-lede">Anyone logged in can report a flood: drop a pin on the spot, add a photo, and set how deep the water is, from ankle-deep to over the head. It shows up on everyone’s map right away.</p>
+          <h2 id="reports-title">Your neighbors are the sensors.</h2>
+          <p class="sec-lede">See water? Pin the spot, snap a photo, say how deep: ankle-high to over the head. It’s on everyone’s map right away.</p>
           <div class="panel lifecycle">
             <ol class="life">
               <li><span class="ms" aria-hidden="true" data-i="camera_fill"></span><b>Reported</b><small>Day 0</small></li>
@@ -265,7 +265,7 @@
             <img src="img/rain-4.webp" alt="A vendor's motorbike on a wet street at night" width="1400" height="875" loading="lazy">
           </div>
         </div>
-        <p class="photo-credit">Photos: Dexter Pimentel</p>
+        <p class="photo-credit">Photos: John Dexter Pimentel</p>
       </section>
 
       <!-- ======================= 03 HELP + HOTLINES (Tugak right) ======================= -->
@@ -273,7 +273,7 @@
         <div class="row-copy">
           <p class="sec-num"><span>03</span> Help &amp; hotlines</p>
           <h2 id="hot-title">Save these numbers before you need them.</h2>
-          <p class="sec-lede">The Help tab keeps help one tap away: press and hold SOS to call 911, find the nearest evacuation center, or call a hotline. Save all five to your contacts now, in one step.</p>
+          <p class="sec-lede">Hold SOS to call 911. Find the nearest evacuation center. Or put all five hotlines in your phone with one tap, right now.</p>
 
           <!-- Same numbers as the app (kHotlines in lib/data/demo_data.dart). -->
           <ul class="hot-list" id="hotList">
@@ -325,8 +325,8 @@
       <section class="row flip" id="barangays" aria-labelledby="map-title">
         <div class="row-copy">
           <p class="sec-num"><span>04</span> Coverage</p>
-          <h2 id="map-title">Made for all 27 barangays of Mabalacat.</h2>
-          <p class="sec-lede">The weather and the flood outlook cover the whole city, from Sapang Balen in the north to Lakandula in the south. Point at a dot to see its name.</p>
+          <h2 id="map-title">All 27 barangays. Yours included.</h2>
+          <p class="sec-lede">The forecast and the flood outlook cover the whole city, Sapang Balen in the north to Lakandula in the south. Tap a dot to see its name.</p>
           <figure class="city-map">
             <svg class="map-svg" viewBox="-10 -10 820 550" role="img" aria-label="Map of Mabalacat City with dots for its 27 barangays">
               <path class="city-shape" d="M0.0 218.0 L75.5 530.3 L117.8 477.8 L127.8 479.2 L132.2 462.7 L152.4 457.7 L152.1 453.0 L174.7 461.6 L174.3 452.4 L184.7 453.1 L195.7 471.6 L242.5 452.7 L279.8 453.6 L305.8 466.2 L347.5 457.5 L381.5 482.7 L387.1 503.8 L415.8 502.6 L477.7 473.4 L498.8 426.6 L525.4 437.3 L517.8 457.8 L560.3 466.3 L587.9 460.4 L585.0 448.3 L602.1 456.0 L640.7 440.9 L667.3 449.5 L693.7 443.9 L719.5 449.4 L779.3 433.5 L800.0 422.5 L669.9 0.0 L648.5 9.7 L604.0 2.4 L559.6 17.6 L496.9 13.0 L445.4 36.1 L419.9 56.8 L393.0 53.9 L374.9 72.2 L234.5 92.8 L181.3 137.7 L58.7 180.6 L0.0 218.0Z"/>
@@ -375,7 +375,7 @@
       <section class="row" id="faq" aria-labelledby="faq-title">
         <div class="row-copy">
           <p class="sec-num"><span>05</span> FAQ</p>
-          <h2 id="faq-title">Questions people ask.</h2>
+          <h2 id="faq-title">Good questions.</h2>
           <div class="faq-list">
             <details>
               <summary>Is AgosAlert official?</summary>
@@ -383,7 +383,7 @@
             </details>
             <details>
               <summary>Do I need an account?</summary>
-              <p>Only to report floods and vote on reports. The weather, the map, hotlines and SOS work without one: pick <em>Look around as a guest</em>. Accounts are free and only ask for your name, email, and barangay.</p>
+              <p>Only to report floods and vote on reports. The weather, the map, hotlines and SOS work without one: pick <em>Continue as guest</em>. Accounts are free and only ask for your name, email, and barangay.</p>
             </details>
             <details>
               <summary>Is the data real?</summary>
@@ -415,10 +415,10 @@
         <h2 id="end-title">Check the sky before it checks you.</h2>
         <div class="hero-cta">
           <button class="btn btn-white btn-lg" type="button" data-open-app>
-            <span class="ms" aria-hidden="true" data-i="arrow_right"></span>Open AgosAlert
+            <span class="ms" aria-hidden="true" data-i="arrow_right"></span>Open the app
           </button>
           <button class="btn btn-blue btn-lg" type="button" data-guest>
-            <span class="ms" aria-hidden="true" data-i="eye_fill"></span>Look around as a guest
+            <span class="ms" aria-hidden="true" data-i="eye_fill"></span>Try it as a guest
           </button>
         </div>
       </section>
@@ -437,7 +437,7 @@
       <div class="foot-credits">
         <span>Weather: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a></span>
         <span>Map data: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</span>
-        <span>Photos: Dexter Pimentel</span>
+        <span>Photos: John Dexter Pimentel</span>
         <span>© 2026 AgosAlert</span>
       </div>
     </footer>
@@ -456,22 +456,20 @@
       </button>
       <img class="modal-logo" src="img/logo_icon_dark.png" alt="" width="56" height="56">
       <h2 id="loginTitle">Open AgosAlert</h2>
-      <p class="modal-sub" id="loginSub">Log in to report floods and vote on reports, or look around as a guest.</p>
+      <p class="modal-sub" id="loginSub">Free. Look around without an account.</p>
 
       <button class="choice choice-main" type="button" data-as="user">
         <span class="ms" aria-hidden="true" data-i="person_fill"></span>
-        <span class="choice-text"><b>Log in or create an account</b><small>Free. Report floods, vote on reports, save your barangay</small></span>
+        <span class="choice-text"><b>Log in or sign up</b></span>
         <span class="ms choice-go" aria-hidden="true" data-i="arrow_right"></span>
         <span class="spinner" aria-hidden="true"></span>
       </button>
       <button class="choice" type="button" data-as="guest">
         <span class="ms" aria-hidden="true" data-i="eye_fill"></span>
-        <span class="choice-text"><b>Look around as a guest</b><small>Weather, map, hotlines, and SOS. No reporting or voting.</small></span>
+        <span class="choice-text"><b>Continue as guest</b></span>
         <span class="ms choice-go" aria-hidden="true" data-i="arrow_right"></span>
         <span class="spinner" aria-hidden="true"></span>
       </button>
-
-      <p class="modal-demo"><span class="ms" aria-hidden="true" data-i="info_circle_fill"></span>Passwords are checked by Supabase and never stored by AgosAlert.</p>
     </div>
   </dialog>
 

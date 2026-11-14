@@ -169,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            _signUp ? 'Create account' : 'Log in',
+            _signUp ? 'Join the watch' : 'Welcome back',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kDisplayFont,
@@ -180,20 +180,26 @@ class _LoginScreenState extends State<LoginScreen> {
               letterSpacing: displayTracking(34),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
+          // Nov 14 2026 (Adrian: "boring and hard to read"): shorter lines,
+          // Apple's 17 pt body, stronger contrast than the gray caption.
           Text(
             _signUp
-                ? 'Free. Lets you report floods and vote on '
-                      'reports in Mabalacat City.'
-                : 'Welcome back to AgosAlert.',
+                ? 'Free, and it takes a minute. Post floods, vote on what\'s real, and put your barangay first.'
+                : 'Your reports, your votes, your barangay. Right where you left them.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: c.textSecondary, fontSize: 15),
+            style: TextStyle(
+              color: c.textPrimary.withValues(alpha: 0.72),
+              fontSize: 17,
+              height: 1.4,
+            ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 26),
           ..._fields(c),
           const SizedBox(height: 20),
           PrimaryButton(
-            label: _signUp ? 'Create account' : 'Log in',
+            label: _signUp ? 'Create my account' : 'Log in',
+            color: kBlue,
             loading: _busy,
             onPressed: _submit,
           ),
@@ -201,15 +207,14 @@ class _LoginScreenState extends State<LoginScreen> {
           _modeSwitch(c),
           const SizedBox(height: 24),
           SecondaryButton(
-            label: 'Continue as guest',
+            label: 'Just looking? Continue as guest',
             onPressed: _busy ? null : _continueAsGuest,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
-            'Guests can see the weather, map, reports, '
-            'hotlines and SOS.',
+            'Weather, map, reports, hotlines and SOS. No account needed.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: c.textSecondary, fontSize: 12),
+            style: TextStyle(color: c.textSecondary, fontSize: 13),
           ),
         ],
       ),
@@ -378,11 +383,11 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           child: Text.rich(
             TextSpan(
-              text: _signUp ? 'Have an account? ' : 'New to AgosAlert? ',
+              text: _signUp ? 'Already in? ' : 'New here? ',
               style: TextStyle(color: c.textSecondary, fontSize: 15),
               children: [
                 TextSpan(
-                  text: _signUp ? 'Log in' : 'Create an account',
+                  text: _signUp ? 'Log in' : 'Create a free account',
                   style: TextStyle(
                     color: c.accent,
                     fontWeight: FontWeight.w600,

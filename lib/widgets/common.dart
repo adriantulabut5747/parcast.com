@@ -111,7 +111,12 @@ class _StarsPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rnd = math.Random(14);
-    final n = (size.width * size.height / 6500).clamp(40, 400).round();
+    // Phones (Nov 14 2026, Adrian: they looked busy there): a third as
+    // many, and dimmer, below.
+    final phone = size.width < 600;
+    final n = (size.width * size.height / (phone ? 20000 : 6500))
+        .clamp(16, 400)
+        .round();
     final paint = Paint();
     for (var i = 0; i < n; i++) {
       final at = Offset(
@@ -131,7 +136,10 @@ class _StarsPainter extends CustomPainter {
           ? 0.75
           : 0.5;
       paint.color = rgb.withValues(
-        alpha: (0.15 + rnd.nextDouble() * 0.4) * (r == 0.5 ? 0.8 : 1),
+        alpha:
+            (0.15 + rnd.nextDouble() * 0.4) *
+            (r == 0.5 ? 0.8 : 1) *
+            (phone ? 0.55 : 1),
       );
       canvas.drawCircle(at, r, paint);
     }

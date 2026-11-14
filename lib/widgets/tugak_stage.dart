@@ -73,14 +73,17 @@ enum StageTap { tugak }
 /// 2026: the stage is the "now" card). Tugak is framed in what's left, and
 /// his bubble goes to the free corner: [below] = across the bottom (phones),
 /// else bottom left beside him. In CSS px.
+/// [zoom] > 1 brings the camera closer (phones: a shorter card, a bigger
+/// Tugak; Nov 14 2026, Adrian).
 class StageReserve {
-  final double left, top, bottom;
+  final double left, top, bottom, zoom;
   final bool below;
   const StageReserve({
     this.left = 0,
     this.top = 0,
     this.bottom = 0,
     this.below = false,
+    this.zoom = 1,
   });
 
   Map<String, Object> toJson() => {
@@ -88,6 +91,7 @@ class StageReserve {
     'top': top,
     'bottom': bottom,
     'bubble': below ? 'below' : 'side',
+    'zoom': zoom,
   };
 
   @override
@@ -96,8 +100,9 @@ class StageReserve {
       other.left == left &&
       other.top == top &&
       other.bottom == bottom &&
-      other.below == below;
+      other.below == below &&
+      other.zoom == zoom;
 
   @override
-  int get hashCode => Object.hash(left, top, bottom, below);
+  int get hashCode => Object.hash(left, top, bottom, below, zoom);
 }

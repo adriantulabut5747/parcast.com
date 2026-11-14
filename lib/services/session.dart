@@ -26,7 +26,7 @@ import '../theme.dart';
 /// value below falls back to its default there.
 Map<String, String> get _query => Uri.base.queryParameters;
 
-/// The landing page's "Look around as a guest" (`?as=guest`).
+/// The landing page's "Continue as guest" (`?as=guest`).
 bool get openAsGuest => _query['as'] == 'guest';
 
 /// Reads the theme from the web address, before the app starts.

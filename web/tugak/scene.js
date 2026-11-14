@@ -437,7 +437,7 @@ function create(container, optsJson, cb) {
     }
     // Tugak in the middle; a little further back on narrow screens.
     const look = new THREE.Vector3(0, 2.35, 0);
-    const dist = a < (reserve.bubble ? 0.75 : 0.9) ? 13.6 : 12.4; // beside the readings he only needs his own half
+    const dist = (a < (reserve.bubble ? 0.75 : 0.9) ? 13.6 : 12.4) / (reserve.zoom || 1); // beside the readings he only needs his own half; zoom: phones
     camera.position.set(0, 1.9, dist);
     camera.lookAt(look);
     camera.updateProjectionMatrix();

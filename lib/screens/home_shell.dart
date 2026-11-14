@@ -111,6 +111,8 @@ class HomeShellState extends State<HomeShell>
   void didChangeDependencies() {
     super.didChangeDependencies();
     BrandLogo.precache(context);
+    // Tugak's still: what the Weather card shows while his 3D loads
+    precacheImage(const AssetImage('assets/images/tugak.png'), context);
     for (final n in _navArt) {
       precacheImage(AssetImage('assets/images/nav_$n.png'), context);
     }
@@ -353,8 +355,8 @@ class HomeShellState extends State<HomeShell>
                   // Reports' + (the Map draws its own, next to its sheet).
                   // It fades and shrinks with the swipe, like the nav.
                   Positioned(
-                    right: 16,
-                    bottom: 96 + MediaQuery.paddingOf(context).bottom,
+                    right: 28,
+                    bottom: 80 + MediaQuery.paddingOf(context).bottom,
                     child: AnimatedBuilder(
                       animation: _slide,
                       builder: (context, child) {
@@ -386,7 +388,9 @@ class HomeShellState extends State<HomeShell>
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              // Telegram-sized (Nov 14 2026, Adrian): a slimmer pill with
+              // more room at the sides.
+              padding: const EdgeInsets.fromLTRB(28, 0, 28, 10),
               // Over the web map, the nav needs the browser's blur (and
               // must keep its taps away from the map). See MapGlass.
               child: MapGlass(
@@ -747,7 +751,7 @@ class HomeShellState extends State<HomeShell>
   // pill, with its name below and ‹ › at the sides (decoration only).
   // Closed tabs show just their icon, a bit faded (long-press = its name).
   // Icons: tools/nav_icons.js -> assets/images/nav_<name>.png.
-  static const _navHeight = 68.0;
+  static const _navHeight = 56.0;
   static const _navArt = ['weather', 'map', 'reports', 'help'];
   static const _navGrow = 0.8; // the open tab is this much wider than 1 tab
   static const _navInset = 6.0; // gap between the pill's edge and the tabs
@@ -822,7 +826,7 @@ class HomeShellState extends State<HomeShell>
   /// One tab. [s] = how open it is: 0 = closed, 1 = the open tab.
   Widget _navTab(AppColors c, int i, double s) {
     final label = _items[i].$3;
-    final icon = lerpDouble(33, 46, s)!;
+    final icon = lerpDouble(26, 36, s)!;
     const inner = _navHeight - 16; // the highlight's height
     return Semantics(
       button: true,
@@ -848,7 +852,7 @@ class HomeShellState extends State<HomeShell>
                 children: [
                   Positioned(
                     // Closed: centered. Open: lifted out of the pill.
-                    top: lerpDouble((inner - icon) / 2, -22, s),
+                    top: lerpDouble((inner - icon) / 2, -14, s),
                     child: Image.asset(
                       'assets/images/nav_${_navArt[i]}.png',
                       width: icon,
@@ -860,7 +864,7 @@ class HomeShellState extends State<HomeShell>
                   ),
                   if (s > 0.01) ...[
                     Positioned(
-                      bottom: 6,
+                      bottom: 4,
                       child: Opacity(
                         opacity: s,
                         child: Text(
@@ -868,7 +872,7 @@ class HomeShellState extends State<HomeShell>
                           style: TextStyle(
                             fontFamily: kFontFamily,
                             color: c.textPrimary,
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
                             height: 1,
                           ),
@@ -877,8 +881,8 @@ class HomeShellState extends State<HomeShell>
                     ),
                     for (final left in [true, false])
                       Positioned(
-                        left: left ? 8 : null,
-                        right: left ? null : 8,
+                        left: left ? 6 : null,
+                        right: left ? null : 6,
                         top: 0,
                         bottom: 0,
                         child: Opacity(
@@ -887,7 +891,7 @@ class HomeShellState extends State<HomeShell>
                             left
                                 ? CupertinoIcons.chevron_left
                                 : CupertinoIcons.chevron_right,
-                            size: 13,
+                            size: 11,
                             color: c.textSecondary,
                           ),
                         ),

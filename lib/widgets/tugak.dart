@@ -363,18 +363,19 @@ class _SayPainter extends CustomPainter {
 }
 
 /// Tugak on the sky without 3D: what the terrace shows before its 3D
-/// frame is ready, where WebGL is missing, and outside the browser.
-/// [line] (if given) sits in a glass bubble at the top, or where
-/// [reserve] says (the same spots as the 3D scene).
+/// frame is ready ([loading]: his still picture breathing, with a
+/// "typing" bubble, Nov 14 2026), where WebGL is missing, and outside the
+/// browser. [line] (if given) sits in a bubble where [reserve] says (the
+/// same spots as the 3D scene).
 class TugakStill extends StatelessWidget {
   final TugakWeather weather;
   final String? line;
-  final bool showTugak;
+  final bool loading;
   final StageReserve? reserve;
   const TugakStill({
     required this.weather,
     this.line,
-    this.showTugak = true,
+    this.loading = false,
     this.reserve,
     super.key,
   });
@@ -386,6 +387,34 @@ class TugakStill extends StatelessWidget {
     // pool of the sky behind him, so the switch to 3D doesn't jump.
     const stage = Color(0xFF070A1C);
     final sky = weatherGradient(weather.code, weather.isDay).first;
+    final r = reserve ?? const StageReserve();
+    Widget tugak(BoxConstraints area) {
+      final size = math.min(area.maxWidth, area.maxHeight) * 0.92;
+      Widget image = TugakImage(size: size);
+      // the zoomed-in 3D camera (phones): grow to the same size, so he
+      // doesn't jump when the 3D scene takes over
+      // (the picture has room under his feet, hence the nudge down)
+      if (r.zoom > 1) {
+        image = Transform.translate(
+          offset: Offset(0, size * 0.33),
+          child: Transform.scale(
+            scale: r.zoom * 1.16,
+            alignment: Alignment.bottomCenter,
+            child: image,
+          ),
+        );
+      }
+      return Align(
+        alignment: Alignment.bottomCenter,
+        child: loading ? _Breathing(child: image) : image,
+      );
+    }
+
+    final Widget? bubble = line != null
+        ? TugakSay(line, tail: r.below ? AxisDirection.up : AxisDirection.right)
+        : loading
+        ? const _TypingBubble()
+        : null;
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: RadialGradient(
@@ -394,70 +423,143 @@ class TugakStill extends StatelessWidget {
           colors: [Color.alphaBlend(sky.withValues(alpha: 0.5), stage), stage],
         ),
       ),
-      child: LayoutBuilder(
-        builder: (context, box) => Stack(
-          children: [
-            if (reserve case final r?) ...[
-              if (showTugak)
-                Positioned(
-                  left: r.left,
-                  top: r.top,
-                  right: 0,
-                  bottom: r.bottom,
-                  child: LayoutBuilder(
-                    builder: (context, area) => Align(
-                      alignment: Alignment.bottomCenter,
-                      child: TugakImage(
-                        size: math.min(area.maxWidth, area.maxHeight) * 0.9,
-                      ),
-                    ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: r.left,
+            top: r.top,
+            right: 0,
+            bottom: r.bottom,
+            child: LayoutBuilder(builder: (context, area) => tugak(area)),
+          ),
+          if (bubble != null)
+            r.below || reserve == null
+                ? Positioned(left: 12, right: 12, bottom: 12, child: bubble)
+                : Positioned(
+                    left: 16,
+                    bottom: math.max(16, r.bottom),
+                    width: math.max(160, r.left - 30),
+                    child: bubble,
                   ),
-                ),
-              if (line != null)
-                r.below
-                    ? Positioned(
-                        left: 12,
-                        right: 12,
-                        bottom: 12,
-                        child: TugakSay(line, tail: AxisDirection.up),
-                      )
-                    : Positioned(
-                        left: 16,
-                        bottom: math.max(16, r.bottom),
-                        width: math.max(160, r.left - 30),
-                        child: TugakSay(line, tail: AxisDirection.right),
+        ],
+      ),
+    );
+  }
+}
+
+/// Loading: a slow fade in and out, like he's breathing. Runs only until
+/// the 3D scene is ready (then this whole layer fades away and is gone).
+class _Breathing extends StatefulWidget {
+  final Widget child;
+  const _Breathing({required this.child});
+
+  @override
+  State<_Breathing> createState() => _BreathingState();
+}
+
+class _BreathingState extends State<_Breathing>
+    with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return Opacity(opacity: 0.7, child: widget.child);
+    }
+    return FadeTransition(
+      opacity: Tween(
+        begin: 0.45,
+        end: 0.85,
+      ).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut)),
+      child: ScaleTransition(
+        scale: Tween(
+          begin: 0.985,
+          end: 1.0,
+        ).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut)),
+        alignment: Alignment.bottomCenter,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// iMessage's "typing" bubble: three dots that rise and dim in turn.
+class _TypingBubble extends StatefulWidget {
+  const _TypingBubble();
+
+  @override
+  State<_TypingBubble> createState() => _TypingBubbleState();
+}
+
+class _TypingBubbleState extends State<_TypingBubble>
+    with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors(context);
+    return Semantics(
+      label: 'Tugak is checking the sky',
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: c.isDark ? const Color(0xFF12141F) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: c.isDark
+                  ? const Color(0x1FFFFFFF)
+                  : const Color(0x14000000),
+            ),
+          ),
+          child: AnimatedBuilder(
+            animation: _c,
+            builder: (context, _) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < 3; i++) ...[
+                  if (i > 0) const SizedBox(width: 5),
+                  () {
+                    // each dot peaks a third of a cycle after the last
+                    final t = (_c.value - i * 0.18) % 1.0;
+                    final up = math.sin(math.pi * (t * 2).clamp(0.0, 1.0));
+                    return Transform.translate(
+                      offset: Offset(0, -3 * up),
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: c.textSecondary.withValues(
+                            alpha: 0.45 + 0.55 * up,
+                          ),
+                        ),
                       ),
-            ] else ...[
-              if (showTugak)
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: TugakImage(size: box.maxHeight * 0.72),
-                ),
-              if (line != null)
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  top: 12,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xC7121420),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0x1AFFFFFF)),
-                    ),
-                    child: Text(
-                      line,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        height: 1.35,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ],
+                    );
+                  }(),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -68,9 +68,12 @@ class _AssistanceTabState extends State<AssistanceTab> {
   @override
   Widget build(BuildContext context) {
     final c = AppColors(context);
-    final emergency = _emergency(context, c);
-    final hotlines = _hotlines(context, c);
-    final shelter = _nearestShelter(context, c);
+    // Phones and tablets (Nov 14 2026, Adrian): a compact SOS card, and
+    // every hotline and shelter listed right away (no "All" tap).
+    final desktop = screenSizeOf(context) == ScreenSize.desktop;
+    final emergency = _emergency(context, c, compact: !desktop);
+    final hotlines = _hotlines(context, c, all: !desktop);
+    final shelter = _nearestShelter(context, c, all: !desktop);
     final note = Text(
       'Hotline numbers are from Mabalacat City government channels. Check them locally before you rely on them.',
       style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.45),
@@ -82,7 +85,7 @@ class _AssistanceTabState extends State<AssistanceTab> {
     // Desktop: two full-width bands, so nothing ends up lopsided.
     // Band 1: SOS (left) and hotlines + shelter (right), stretched to the
     // same height. Band 2: Be ready across the whole width.
-    if (screenSizeOf(context) == ScreenSize.desktop) {
+    if (desktop) {
       return ListView(
         padding: pagePadding(context),
         children: [
@@ -119,13 +122,13 @@ class _AssistanceTabState extends State<AssistanceTab> {
       padding: pagePadding(context),
       children: [
         header,
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         emergency,
-        const SizedBox(height: 30),
+        const SizedBox(height: 22),
         hotlines,
-        const SizedBox(height: 30),
+        const SizedBox(height: 22),
         shelter,
-        const SizedBox(height: 34),
+        const SizedBox(height: 26),
         _beReady(c),
         const SizedBox(height: 20),
         note,
@@ -135,15 +138,19 @@ class _AssistanceTabState extends State<AssistanceTab> {
 
   // The focal point of the page: the SOS button, alone and centered. It is
   // the only strong color here, so the eye lands on it first.
-  Widget _emergency(BuildContext context, AppColors c) {
+  // [compact] (phones, tablets): the button beside its caption, not above.
+  Widget _emergency(BuildContext context, AppColors c, {bool compact = false}) {
     final sos = kHotlines.first; // 911
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(14, 12, 14, 14)
+          : const EdgeInsets.fromLTRB(18, 24, 18, 18),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _SosButton(
             number: sos.number,
+            compact: compact,
             onActivated: () => confirmCall(
               context,
               name: sos.name,
@@ -151,9 +158,9 @@ class _AssistanceTabState extends State<AssistanceTab> {
               color: sos.color,
             ),
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: compact ? 10 : 22),
           Divider(height: 1, color: c.border),
-          const SizedBox(height: 16),
+          SizedBox(height: compact ? 12 : 16),
           Row(
             spacing: 10,
             children: [
@@ -219,19 +226,24 @@ class _AssistanceTabState extends State<AssistanceTab> {
     );
   }
 
-  // CDRRMO and Police one tap away; the rest behind "All".
-  Widget _hotlines(BuildContext context, AppColors c) {
-    final quick = kHotlines
-        .where((h) => h.short == 'CDRRMO' || h.short == 'Police')
-        .toList();
+  // Desktop: CDRRMO and Police one tap away, the rest behind "All".
+  // [all] (phones, tablets): every hotline, no extra tap.
+  Widget _hotlines(BuildContext context, AppColors c, {bool all = false}) {
+    final quick = all
+        ? kHotlines
+        : kHotlines
+              .where((h) => h.short == 'CDRRMO' || h.short == 'Police')
+              .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionHeader(
-          'Hotlines',
-          actionLabel: 'All ${kHotlines.length}',
-          onAction: () => _allHotlines(context),
-        ),
+        all
+            ? const SectionHeader('Hotlines')
+            : SectionHeader(
+                'Hotlines',
+                actionLabel: 'All ${kHotlines.length}',
+                onAction: () => _allHotlines(context),
+              ),
         AppCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Column(
@@ -338,11 +350,50 @@ class _AssistanceTabState extends State<AssistanceTab> {
     );
   }
 
-  // The closest OPEN evacuation center, as one compact row.
-  Widget _nearestShelter(BuildContext context, AppColors c) {
+  // Desktop: the closest OPEN evacuation center, as one compact row.
+  // [all] (phones, tablets): every center, open ones nearest first.
+  Widget _nearestShelter(
+    BuildContext context,
+    AppColors c, {
+    bool all = false,
+  }) {
     final open = kEvacCenters.where((e) => e.open).toList()
       ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
     final e = open.firstOrNull;
+    if (all) {
+      final list = [...kEvacCenters]
+        ..sort((a, b) {
+          if (a.open != b.open) return a.open ? -1 : 1;
+          return a.distanceKm.compareTo(b.distanceKm);
+        });
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeader(
+            'Evacuation centers',
+            badge: const SampleBadge(),
+            actionLabel: 'Details',
+            onAction: () =>
+                Navigator.of(context)
+                    .push(slideRoute(const EvacuationCentersScreen())),
+          ),
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Column(
+              children: [
+                for (var i = 0; i < list.length; i++) ...[
+                  if (i > 0) Divider(height: 1, indent: 52, color: c.border),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: _shelterRow(context, c, list[i]),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -362,66 +413,71 @@ class _AssistanceTabState extends State<AssistanceTab> {
         else
           AppCard(
             padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                _Glyph(e.icon),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        e.name,
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        'Brgy. ${e.barangay} · Open',
-                        style: TextStyle(color: c.textSecondary, fontSize: 13),
-                      ),
-                    ],
-                  ),
+            child: _shelterRow(context, c, e),
+          ),
+      ],
+    );
+  }
+
+  // One center: icon, name, barangay + open/closed, and Directions (open
+  // ones only).
+  Widget _shelterRow(BuildContext context, AppColors c, EvacuationCenter e) {
+    return Row(
+      children: [
+        _Glyph(e.icon),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                e.name,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: 10),
-                PressableScale(
-                  onTap: () => openDirections(context, e.point),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: c.surfaceAlt,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.arrow_up_right_diamond_fill,
-                          color: c.accent,
-                          size: 15,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Directions',
-                          style: TextStyle(
-                            color: c.accent,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+              ),
+              const SizedBox(height: 1),
+              Text(
+                'Brgy. ${e.barangay} · ${e.open ? 'Open' : 'Closed'}',
+                style: TextStyle(color: c.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        if (e.open) ...[
+          const SizedBox(width: 10),
+          PressableScale(
+            onTap: () => openDirections(context, e.point),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: c.surfaceAlt,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    CupertinoIcons.arrow_up_right_diamond_fill,
+                    color: c.accent,
+                    size: 15,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Directions',
+                    style: TextStyle(
+                      color: c.accent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+        ],
       ],
     );
   }
@@ -1201,7 +1257,13 @@ Widget _stepButton(AppColors c, IconData icon, VoidCallback? onTap) {
 class _SosButton extends StatefulWidget {
   final String number;
   final VoidCallback onActivated;
-  const _SosButton({required this.number, required this.onActivated});
+  // phones: a smaller button with its caption to the right
+  final bool compact;
+  const _SosButton({
+    required this.number,
+    required this.onActivated,
+    this.compact = false,
+  });
 
   @override
   State<_SosButton> createState() => _SosButtonState();
@@ -1244,120 +1306,140 @@ class _SosButtonState extends State<_SosButton> with TickerProviderStateMixin {
       animation: Listenable.merge([_hold, _pulse]),
       builder: (context, _) {
         final holding = _hold.value > 0;
-        return Column(
-          children: [
-            Semantics(
-              button: true,
-              label: 'SOS, call ${widget.number}',
-              onTap: widget.onActivated,
-              excludeSemantics: true,
-              // Press = the ring fills (forward). Let go early, or slide
-              // off = it drains back (reverse) and nothing happens.
-              child: GestureDetector(
-                onTapDown: (_) => _hold.forward(),
-                onTapUp: (_) => _hold.reverse(),
-                onTapCancel: () => _hold.reverse(),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: SizedBox(
-                    width: 176,
-                    height: 176,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Two ripples half a loop apart, growing from the
-                        // button's edge outwards while fading.
-                        if (!still && !holding)
-                          for (final offset in [0.0, 0.5])
-                            Builder(
-                              builder: (context) {
-                                final t = (_pulse.value + offset) % 1;
-                                return Container(
-                                  width: 116 + 60 * t,
-                                  height: 116 + 60 * t,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: kDanger.withValues(
-                                      alpha: 0.12 * (1 - t),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                        // The ring that fills while holding.
-                        SizedBox(
-                          width: 140,
-                          height: 140,
-                          child: CircularProgressIndicator(
-                            value: _hold.value,
-                            strokeWidth: 5,
-                            strokeCap: StrokeCap.round,
-                            color: kDanger,
-                            backgroundColor: holding
-                                ? kDanger.withValues(alpha: 0.15)
-                                : Colors.transparent,
-                          ),
-                        ),
-                        // The button sinks in (up to 6%) the longer it's
-                        // held, like pressing a real button.
-                        Transform.scale(
-                          scale: 1 - _hold.value * 0.06,
-                          child: Container(
-                            width: 116,
-                            height: 116,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              // Lit from the top, like the rest of the app.
-                              gradient: const LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Color(0xFFEE5A5A), Color(0xFFD23C3C)],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFD23C3C)
-                                      .withValues(alpha: c.isDark ? 0.35 : 0.3),
-                                  blurRadius: 24,
-                                  offset: const Offset(0, 10),
+        final k = widget.compact;
+        final box = k ? 108.0 : 176.0, btn = k ? 80.0 : 116.0;
+        final ring = k ? 96.0 : 140.0, grow = k ? 28.0 : 60.0;
+        final button = Semantics(
+          button: true,
+          label: 'SOS, call ${widget.number}',
+          onTap: widget.onActivated,
+          excludeSemantics: true,
+          // Press = the ring fills (forward). Let go early, or slide
+          // off = it drains back (reverse) and nothing happens.
+          child: GestureDetector(
+            onTapDown: (_) => _hold.forward(),
+            onTapUp: (_) => _hold.reverse(),
+            onTapCancel: () => _hold.reverse(),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: SizedBox(
+                width: box,
+                height: box,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Two ripples half a loop apart, growing from the
+                    // button's edge outwards while fading.
+                    if (!still && !holding)
+                      for (final offset in [0.0, 0.5])
+                        Builder(
+                          builder: (context) {
+                            final t = (_pulse.value + offset) % 1;
+                            return Container(
+                              width: btn + grow * t,
+                              height: btn + grow * t,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: kDanger.withValues(
+                                  alpha: 0.12 * (1 - t),
                                 ),
-                              ],
-                            ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              'SOS',
-                              style: TextStyle(
-                                fontFamily: kDisplayFont,
-                                color: Colors.white,
-                                fontSize: 28,
-                                letterSpacing: 1, // all caps: open it up
-                                fontWeight: FontWeight.w700,
                               ),
+                            );
+                          },
+                        ),
+                    // The ring that fills while holding.
+                    SizedBox(
+                      width: ring,
+                      height: ring,
+                      child: CircularProgressIndicator(
+                        value: _hold.value,
+                        strokeWidth: 5,
+                        strokeCap: StrokeCap.round,
+                        color: kDanger,
+                        backgroundColor: holding
+                            ? kDanger.withValues(alpha: 0.15)
+                            : Colors.transparent,
+                      ),
+                    ),
+                    // The button sinks in (up to 6%) the longer it's
+                    // held, like pressing a real button.
+                    Transform.scale(
+                      scale: 1 - _hold.value * 0.06,
+                      child: Container(
+                        width: btn,
+                        height: btn,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          // Lit from the top, like the rest of the app.
+                          gradient: const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFFEE5A5A), Color(0xFFD23C3C)],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFD23C3C)
+                                  .withValues(alpha: c.isDark ? 0.35 : 0.3),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
                             ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'SOS',
+                          style: TextStyle(
+                            fontFamily: kDisplayFont,
+                            color: Colors.white,
+                            fontSize: k ? 22 : 28,
+                            letterSpacing: 1, // all caps: open it up
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              holding ? 'Keep holding…' : 'Hold to call ${widget.number}',
-              style: TextStyle(
-                fontFamily: kDisplayFont,
-                color: c.textPrimary,
-                fontSize: 20,
-                letterSpacing: displayTracking(20),
-                fontWeight: FontWeight.w700,
+          ),
+        );
+        final title = Text(
+          holding ? 'Keep holding…' : 'Hold to call ${widget.number}',
+          style: TextStyle(
+            fontFamily: kDisplayFont,
+            color: c.textPrimary,
+            fontSize: 20,
+            letterSpacing: displayTracking(20),
+            fontWeight: FontWeight.w700,
+          ),
+        );
+        final caption = Text(
+          'For danger to life. We ask before calling.',
+          textAlign: k ? TextAlign.start : TextAlign.center,
+          style: TextStyle(color: c.textSecondary, fontSize: 13),
+        );
+        if (k) {
+          return Row(
+            children: [
+              button,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [title, const SizedBox(height: 3), caption],
+                ),
               ),
-            ),
+            ],
+          );
+        }
+        return Column(
+          children: [
+            button,
+            const SizedBox(height: 10),
+            title,
             const SizedBox(height: 4),
-            Text(
-              'For danger to life. We ask before calling.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: c.textSecondary, fontSize: 13),
-            ),
+            caption,
           ],
         );
       },

@@ -140,7 +140,7 @@ class _TugakStageState extends State<TugakStage> {
               child: TugakStill(
                 weather: widget.weather,
                 line: _failed ? widget.line : null,
-                showTugak: _failed,
+                loading: !_failed,
                 reserve: widget.reserve,
               ),
             ),

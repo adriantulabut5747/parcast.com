@@ -102,16 +102,17 @@ class _WeatherTabState extends State<WeatherTab> {
                     delay: Duration(milliseconds: delayMs),
                     child: child,
                   );
-                  // Tugak's stage = the "now" card. Phones: the readings
-                  // on top, Tugak, his bubble at the bottom (taller than
-                  // wide). Desktop: as tall as the column beside it.
+                  // Tugak's stage = the "now" card. Phones: compact readings
+                  // on top, Tugak (camera closer), his bubble at the bottom
+                  // (Nov 14 2026, Adrian: the card was too tall, Tugak too
+                  // small). Desktop: as tall as the column beside it.
                   final terrace = _Terrace(weather: w, hour: _hour);
                   final stage = part(
                     wide
                         ? terrace
                         : SizedBox(
                             height: phone
-                                ? (screen.width * 1.4).clamp(500.0, 580.0)
+                                ? (screen.width * 1.18).clamp(430.0, 480.0)
                                 : 460.0,
                             child: terrace,
                           ),
@@ -135,8 +136,8 @@ class _WeatherTabState extends State<WeatherTab> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       spacing: gap,
                       children: [
+                        greeting, // above the card (Adrian, Nov 14 2026)
                         stage,
-                        greeting,
                         days, // right under the live readings, like desktop (Adrian, Nov 14 2026)
                         conditions,
                         rain,
@@ -272,7 +273,12 @@ class _TerraceState extends State<_Terrace> {
           builder: (context, box) {
             final below = box.maxWidth < 560;
             final reserve = below
-                ? const StageReserve(top: 196, bottom: 104, below: true)
+                ? const StageReserve(
+                    top: 128,
+                    bottom: 92,
+                    below: true,
+                    zoom: 1.3,
+                  )
                 : StageReserve(left: (box.maxWidth * 0.5).clamp(300.0, 420.0));
             return CustomPaint(
               foregroundPainter: const GlassEdgePainter(radius: 30, dark: true),
@@ -296,7 +302,10 @@ class _TerraceState extends State<_Terrace> {
                       left: below ? 16 : 20,
                       top: below ? 14 : 18,
                       width: below ? box.maxWidth - 32 : reserve.left - 36,
-                      child: _NowReadout(weather: widget.weather),
+                      child: _NowReadout(
+                        weather: widget.weather,
+                        compact: below,
+                      ),
                     ),
                   ],
                 ),
@@ -449,7 +458,9 @@ class _Greeting extends StatelessWidget {
 /// ------------------------------------------------------------
 class _NowReadout extends StatelessWidget {
   final MabalacatWeather weather;
-  const _NowReadout({required this.weather});
+  // phones: a smaller numeral and the three stats on one line
+  final bool compact;
+  const _NowReadout({required this.weather, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -490,7 +501,7 @@ class _NowReadout extends StatelessWidget {
               style: TextStyle(
                 fontFamily: kDisplayFont,
                 color: kTextPrimaryDark,
-                fontSize: 64,
+                fontSize: compact ? 54 : 64,
                 height: 1,
                 fontWeight: FontWeight.w300,
                 letterSpacing: -2,
@@ -544,34 +555,77 @@ class _NowReadout extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        // The three stats in a sunken well.
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: kTextPrimaryDark.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0x1FFFFFFF)),
-          ),
-          child: Row(
+        SizedBox(height: compact ? 10 : 12),
+        if (compact)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _stat(
-                CupertinoIcons.umbrella_fill,
-                '${h.rainChance}%',
-                'Rain chance',
-              ),
-              _stat(
+              _inline(CupertinoIcons.umbrella_fill, '${h.rainChance}%', 'rain'),
+              _inline(
                 CupertinoIcons.drop_fill,
                 '${h.rain.toStringAsFixed(1)} mm',
-                'Rain this hour',
+                'this hour',
               ),
-              _stat(CupertinoIcons.cloud, '${w.cloud}%', 'Cloud cover'),
+              _inline(CupertinoIcons.cloud, '${w.cloud}%', 'cloud'),
             ],
+          )
+        else
+          // The three stats in a sunken well.
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: kTextPrimaryDark.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0x1FFFFFFF)),
+            ),
+            child: Row(
+              children: [
+                _stat(
+                  CupertinoIcons.umbrella_fill,
+                  '${h.rainChance}%',
+                  'Rain chance',
+                ),
+                _stat(
+                  CupertinoIcons.drop_fill,
+                  '${h.rain.toStringAsFixed(1)} mm',
+                  'Rain this hour',
+                ),
+                _stat(CupertinoIcons.cloud, '${w.cloud}%', 'Cloud cover'),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
+
+  // shrinks to fit rather than overflow on the narrowest phones
+  Widget _inline(IconData icon, String value, String label) => Flexible(
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: _inlineRow(icon, value, label),
+    ),
+  );
+
+  Widget _inlineRow(IconData icon, String value, String label) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, color: kTextSecondaryDark, size: 13),
+      const SizedBox(width: 4),
+      Text(
+        value,
+        style: const TextStyle(
+          color: kTextPrimaryDark,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+      ),
+      const SizedBox(width: 3),
+      Text(
+        label,
+        style: const TextStyle(color: kTextSecondaryDark, fontSize: 12),
+      ),
+    ],
+  );
 
   Widget _stat(IconData icon, String value, String label) => Expanded(
     child: Column(
@@ -797,11 +851,15 @@ class _WeatherSkeleton extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SkeletonBox(height: 520, radius: 30), // sky card
+          SkeletonBox(width: 110, height: 12, radius: 6), // date
+          SizedBox(height: 8),
+          SkeletonBox(width: 230, height: 32, radius: 10), // greeting
+          SizedBox(height: 8),
+          SkeletonBox(width: 150, height: 14, radius: 7),
+          SizedBox(height: 20),
+          SkeletonBox(height: 450, radius: 30), // Tugak's live card
           SizedBox(height: 16),
-          SkeletonBox(height: 220, radius: 20), // flood outlook
-          SizedBox(height: 16),
-          SkeletonBox(height: 136, radius: 20), // conditions tiles
+          SkeletonBox(height: 300, radius: 20), // next 5 days
         ],
       ),
     );

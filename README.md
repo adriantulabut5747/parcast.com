@@ -40,4 +40,4 @@ Every push to `main` builds the app and publishes the landing page plus the app 
 
 - Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors
 - Weather: [Open-Meteo.com](https://open-meteo.com)
-- Landing page photos: Dexter Pimentel
+- Landing page photos: John Dexter Pimentel

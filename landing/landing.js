@@ -30,11 +30,14 @@
     }
     el.style.boxShadow = out.join(',');
   }
-  starLayer(document.querySelector('.stars.s1'), 260, 0.55);
-  starLayer(document.querySelector('.stars.s2'), 90, 0.8);
-  starLayer(document.querySelector('.stars.s3'), 34, 1);
+  // Phones (Nov 14 2026, Adrian: "really really subtle"): dimmer, fewer
+  // big ones, and no sparkles (the + shapes looked like noise up close).
+  var phone = innerWidth < 600;
+  starLayer(document.querySelector('.stars.s1'), 260, phone ? 0.3 : 0.55);
+  starLayer(document.querySelector('.stars.s2'), phone ? 50 : 90, phone ? 0.38 : 0.8);
+  starLayer(document.querySelector('.stars.s3'), phone ? 10 : 34, phone ? 0.45 : 1);
   var sky = document.querySelector('.sky');
-  for (var s = 0; s < 9; s++) {
+  for (var s = 0; s < (phone ? 0 : 9); s++) {
     var sp = document.createElement('i');
     sp.className = 'spark';
     sp.style.left = (Math.random() * 96 + 2) + '%';
@@ -243,7 +246,10 @@
     // 01 Weather: the same numbers, and which rule matched today.
     $('hwChance').textContent = rainChance + '%';
     $('hwSum').textContent = rainSum + ' mm';
-    $('hwCode').textContent = code + ' · ' + info[0].toLowerCase();
+    // the sky in words as the value, the raw code in the label (phones:
+    // "1 · partly cloudy" ran out of its box, Nov 14 2026)
+    $('hwCode').textContent = info[0];
+    $('hwCodeLabel').textContent = 'Weather code ' + code;
     $('hwTime').textContent = 'Live · updated ' + formatTime(cur.time);
     all('.rule').forEach(function (r) { r.classList.toggle('is-today', r.dataset.level === outlook[0]); });
 

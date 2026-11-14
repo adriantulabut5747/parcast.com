@@ -195,10 +195,12 @@ class _MapTabState extends State<MapTab> {
 
   // The bottom sheet: [_peek] tall when closed. _dragHeight is its height
   // while a finger is dragging it (null otherwise).
-  static const _peek = 64.0;
+  static const _peek = 54.0;
+  static const _fab = 46.0; // the phone's + beside the sheet handle
   bool _sheetOpen = false;
   double? _dragHeight;
   bool _legendOpen = false;
+  bool _layersOpen = false; // phones: the Layers panel under the top row
 
   double _sheetMax(BoxConstraints box) => math.min(box.maxHeight * 0.5, 440.0);
 
@@ -208,7 +210,7 @@ class _MapTabState extends State<MapTab> {
     final top = MediaQuery.paddingOf(context).top;
     // Phones: the sheet sits above the floating bottom nav. Tablets have
     // none, and their sheet doesn't stretch across the whole screen.
-    final bottom = wide ? 16.0 : 96.0;
+    final bottom = wide ? 16.0 : 78.0;
     return LayoutBuilder(
       builder: (context, box) {
         final max = _sheetMax(box);
@@ -224,23 +226,25 @@ class _MapTabState extends State<MapTab> {
               top: top + 10,
               left: 12,
               right: 12,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: wide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        BarangaySearch(onPick: _goToBarangay),
-                        const SizedBox(height: 8),
-                        _chipsAndLegend(c),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              BarangaySearch(onPick: _goToBarangay),
+                              const SizedBox(height: 8),
+                              _chipsAndLegend(c),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        _controls(c, zoomButtons: wide),
                       ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _controls(c, zoomButtons: wide),
-                ],
-              ),
+                    )
+                  : _phoneTop(c),
             ),
             // The sheet. While dragging it follows the finger instantly
             // (duration 0); let go and it springs open or closed.
@@ -255,7 +259,7 @@ class _MapTabState extends State<MapTab> {
                   ? null
                   : _sheetOpen
                   ? 12
-                  : 12 + ReportFab.size + 8,
+                  : 12 + _fab + 8,
               width: wide ? 420 : null,
               bottom: bottom,
               height: height,
@@ -265,7 +269,7 @@ class _MapTabState extends State<MapTab> {
             if (!wide)
               Positioned(
                 right: 12,
-                bottom: bottom + (_peek - ReportFab.size) / 2,
+                bottom: bottom + (_peek - _fab) / 2,
                 child: IgnorePointer(
                   ignoring: _sheetOpen,
                   child: AnimatedScale(
@@ -276,8 +280,8 @@ class _MapTabState extends State<MapTab> {
                       opacity: _sheetOpen ? 0 : 1,
                       duration: const Duration(milliseconds: 200),
                       child: const MapGlass(
-                        radius: ReportFab.size / 2,
-                        child: ReportFab(),
+                        radius: _fab / 2,
+                        child: ReportFab(size: _fab),
                       ),
                     ),
                   ),
@@ -286,6 +290,154 @@ class _MapTabState extends State<MapTab> {
           ],
         );
       },
+    );
+  }
+
+  // Phones (Nov 14 2026, Adrian: the map was boxed in by controls): ONE
+  // row on top, the search, a Layers button and a slim 3D / locate
+  // capsule. The layer toggles and the depth legend wait in a small
+  // panel that Layers opens; the compass appears under the row only while
+  // the map is turned.
+  Widget _phoneTop(AppColors c) {
+    const h = 44.0;
+    Widget btn(String tip, VoidCallback onTap, Widget child) => Tooltip(
+      message: tip,
+      child: PressableScale(
+        onTap: onTap,
+        child: SizedBox(
+          width: h,
+          height: h,
+          child: Center(child: child),
+        ),
+      ),
+    );
+    final hidden = (_showZones ? 0 : 1) + (_showCenters ? 0 : 1);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: BarangaySearch(onPick: _goToBarangay)),
+            const SizedBox(width: 6),
+            Semantics(
+              toggled: _layersOpen,
+              child: _glass(
+                c,
+                radius: h / 2,
+                child: btn(
+                  hidden > 0 ? 'Layers ($hidden hidden)' : 'Layers',
+                  () => setState(() => _layersOpen = !_layersOpen),
+                  Badge(
+                    isLabelVisible: hidden > 0,
+                    smallSize: 7,
+                    backgroundColor: c.accent,
+                    child: Icon(
+                      _layersOpen
+                          ? CupertinoIcons.square_stack_3d_up_fill
+                          : CupertinoIcons.square_stack_3d_up,
+                      size: 19,
+                      color: _layersOpen ? c.accent : c.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            _glass(
+              c,
+              radius: h / 2,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder<double>(
+                    valueListenable: _map.pitch,
+                    builder: (context, pitch, _) {
+                      final is3d = pitch > 12;
+                      return btn(
+                        is3d ? 'Flat view' : '3D view',
+                        () => _map.set3d(!is3d),
+                        Text(
+                          is3d ? '2D' : '3D',
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  Container(
+                    width: 1,
+                    height: 22,
+                    color: c.textPrimary.withValues(alpha: 0.12),
+                  ),
+                  btn(
+                    'Back to the city',
+                    _recenter,
+                    Icon(
+                      CupertinoIcons.location_fill,
+                      size: 17,
+                      color: c.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: !_layersOpen
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: _glass(
+                    c,
+                    radius: 20,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _layerChip(
+                                c,
+                                icon: AgosIcons.flood,
+                                label: 'Reports · ${_zones.length}',
+                                on: _showZones,
+                                onTap: () =>
+                                    setState(() => _showZones = !_showZones),
+                              ),
+                              _layerChip(
+                                c,
+                                icon: CupertinoIcons.house_alt_fill,
+                                label:
+                                    'Shelters · ${kEvacCenters.where((e) => e.open).length}/${kEvacCenters.length}',
+                                on: _showCenters,
+                                onTap: () => setState(
+                                  () => _showCenters = !_showCenters,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _legend(c),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+        Align(alignment: Alignment.centerRight, child: _compass(c)),
+      ],
     );
   }
 
@@ -463,7 +615,7 @@ class _MapTabState extends State<MapTab> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        '${_zones.length} reports · $open shelters open',
+                        '${_zones.length} reports · $open shelters',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -641,39 +793,42 @@ class _MapTabState extends State<MapTab> {
             ),
           ),
         ),
-        ValueListenableBuilder<double>(
-          valueListenable: _map.bearing,
-          builder: (context, bearing, _) {
-            final turned = bearing.abs() > 1;
-            return AnimatedScale(
-              scale: turned ? 1 : 0,
-              duration: const Duration(milliseconds: 450),
-              curve: turned ? kBouncyCurve : Curves.easeIn,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: _glass(
-                  c,
-                  radius: 24,
-                  child: _ctrlButton(
-                    c,
-                    tooltip: 'Turn north up',
-                    onTap: _map.resetNorth,
-                    child: Transform.rotate(
-                      angle: -bearing * math.pi / 180,
-                      child: CustomPaint(
-                        size: const Size(26, 26),
-                        painter: _CompassPainter(c.textPrimary),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
+        _compass(c),
       ],
     );
   }
+
+  // Appears (with a bounce) only while the map is turned; tap = north up.
+  Widget _compass(AppColors c) => ValueListenableBuilder<double>(
+    valueListenable: _map.bearing,
+    builder: (context, bearing, _) {
+      final turned = bearing.abs() > 1;
+      return AnimatedScale(
+        scale: turned ? 1 : 0,
+        duration: const Duration(milliseconds: 450),
+        curve: turned ? kBouncyCurve : Curves.easeIn,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: _glass(
+            c,
+            radius: 24,
+            child: _ctrlButton(
+              c,
+              tooltip: 'Turn north up',
+              onTap: _map.resetNorth,
+              child: Transform.rotate(
+                angle: -bearing * math.pi / 180,
+                child: CustomPaint(
+                  size: const Size(26, 26),
+                  painter: _CompassPainter(c.textPrimary),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
 
   Widget _ctrlButton(
     AppColors c, {

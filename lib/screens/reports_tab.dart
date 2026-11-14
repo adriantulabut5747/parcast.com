@@ -138,9 +138,6 @@ class _ReportsTabState extends State<ReportsTab> {
                       pose: 'phone',
                       size: phone ? 96 : 128,
                       line: "See water on a street? Post one photo and pin the spot. That's all I need.",
-                      more: [
-                        phone ? 'Tap the + down there to start.' : 'Posts clear themselves 14 days after the photo, so what you see here is fresh.',
-                      ],
                       footer: phone
                           ? null
                           : SizedBox(

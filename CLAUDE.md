@@ -443,7 +443,7 @@ screenshot — use a branch for risky changes.
   `tools/tugak3d.py -- --poses` into `landing/img/tugak/*.webp`: 01
   Weather (umbrella, right), 02 Reports (phone showing the map, left),
   the floating "pins" there are rendered upside down so they read as
-  falling drops (Adrian), rainy photo marquee (Dexter Pimentel's photos, credited, `rain-*.webp`
+  falling drops (Adrian), rainy photo marquee (John Dexter Pimentel's photos, credited, `rain-*.webp`
   from his `photo-*.jpg`), 03 Help & hotlines (handset, right, no jokes),
   04 Coverage (map pin, left), 05 FAQ (hand to chin, right), finale (hat
   tip). Poses/props are code in the script's `--poses` block: edit that
@@ -550,3 +550,24 @@ screenshot — use a branch for risky changes.
 - Ask before implementing when a request has more than one reading.
 - Be blunt: if an idea is weak or has a real downside, say so plainly.
 - Keep replies short.
+
+## Nov 14 2026 phone pass (Adrian)
+
+- Weather (phones): greeting/date ABOVE Tugak's card; compact readout
+  (54 px numeral, the 3 stats on one line); card (width x 1.18, 430-480);
+  `StageReserve(zoom: 1.3)` brings scene.js's camera closer (bigger
+  Tugak). While his 3D loads: his still (precached in HomeShell),
+  breathing, with an iMessage "typing" bubble (`TugakStill(loading:)`).
+- Phone bottom nav: Telegram-sized (56 tall, 28 px side margins, icons
+  26 / 36). The Reports + sits at bottom 80, the Map sheet at 78.
+- Map (phones): ONE top row (search, Layers button, 3D | locate capsule);
+  Reports / Shelters toggles + depth legend live in the Layers panel;
+  sheet handle 54, + 46 beside it.
+- Help (phones + tablets): compact SOS (button beside its caption), all
+  hotlines and all evacuation centers listed (no "All" tap).
+- Stars: app phones 1/3 as many and dimmer; landing phones dimmer, no
+  sparkles, no shooting star.
+- Login: blue main button; copy "Welcome back" / "Join the watch".
+  Landing copy rewritten (hero "Know the flood / before your / street
+  does."; each line <= the old longest, they can't wrap). Body copy 17-20
+  px in a brighter gray. Photo credit = John Dexter Pimentel.
